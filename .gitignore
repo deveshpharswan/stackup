@@ -1,0 +1,10 @@
+stackup
+stackup.exe
+*.exe
+.gotmp/
+*.env
+.env
+!testdata/.env*
+!test/e2e/fixtures/.env*
+.superpowers/
+.claude/

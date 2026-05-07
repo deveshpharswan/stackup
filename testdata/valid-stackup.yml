@@ -1,0 +1,34 @@
+version: "1"
+
+env:
+  schema:
+    DATABASE_URL:
+      type: url
+      required: true
+    PORT:
+      type: int
+      default: "3000"
+
+services:
+  postgres:
+    health:
+      type: tcp
+      host: localhost
+      port: 5432
+      timeout: 30s
+      interval: 2s
+  api:
+    health:
+      type: http
+      url: http://localhost:8080/health
+      timeout: 60s
+      interval: 3s
+  redis:
+    health:
+      type: docker
+      timeout: 20s
+
+commands:
+  seed:
+    service: api
+    run: "npm run db:seed"
