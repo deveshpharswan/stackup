@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -31,13 +30,11 @@ func New(p *printer.Printer) *Orchestrator {
 	return &Orchestrator{p: p}
 }
 
-func (o *Orchestrator) PreFlight(envFile, exampleFile string, schema map[string]config.EnvVar) bool {
+func (o *Orchestrator) PreFlight(envFile, exampleFile string, schema map[string]config.EnvVar) (bool, map[string]string) {
 	o.p.Phase("Pre-flight")
 	result, injected := env.ValidateWithDefaults(envFile, exampleFile, schema)
 
-	// Apply injected defaults to the process environment
 	for key, val := range injected {
-		os.Setenv(key, val)
 		o.p.EnvDefault(key, val)
 	}
 
@@ -49,12 +46,12 @@ func (o *Orchestrator) PreFlight(envFile, exampleFile string, schema map[string]
 				o.p.EnvKeyValid(key, rule.Type)
 			}
 		}
-		return true
+		return true, injected
 	}
 	for _, e := range result.Errors {
 		o.p.ValidationError(e.Key, e.Message)
 	}
-	return false
+	return false, nil
 }
 
 func (o *Orchestrator) StartTier(ctx context.Context, tier Tier, deps []string, startFn func(context.Context, []string) error, checkers map[string]health.Named, fetcher LogFetcher) error {

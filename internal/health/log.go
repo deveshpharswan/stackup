@@ -13,7 +13,6 @@ import (
 )
 
 // LogChecker watches container logs for a specific pattern string.
-// This handles services that don't have reliable TCP/HTTP readiness signals.
 type LogChecker struct {
 	cli      *dockerclient.Client
 	service  string
@@ -22,8 +21,6 @@ type LogChecker struct {
 	interval time.Duration
 }
 
-// NewLogChecker creates a LogChecker that polls logs of the given service
-// container, searching for pattern until timeout is exceeded.
 func NewLogChecker(cli *dockerclient.Client, service, pattern string, timeout, interval time.Duration) *LogChecker {
 	return &LogChecker{
 		cli:      cli,
@@ -34,28 +31,21 @@ func NewLogChecker(cli *dockerclient.Client, service, pattern string, timeout, i
 	}
 }
 
-// Check polls the container logs until the pattern is found or the timeout expires.
 func (c *LogChecker) Check(ctx context.Context) error {
-	deadline := time.Now().Add(c.timeout)
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
+	err := Poll(ctx, c.timeout, c.interval, func() error {
 		found, err := c.scanLogs(ctx)
-		if err == nil && found {
+		if err != nil {
+			return err
+		}
+		if found {
 			return nil
 		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(c.interval):
-		}
+		return fmt.Errorf("pattern not found")
+	})
+	if err != nil && err != ctx.Err() {
+		return fmt.Errorf("log pattern %q not found in %s after %s", c.pattern, c.service, c.timeout)
 	}
-	return fmt.Errorf("log pattern %q not found in %s after %s", c.pattern, c.service, c.timeout)
+	return err
 }
 
 func (c *LogChecker) scanLogs(ctx context.Context) (bool, error) {

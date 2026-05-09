@@ -17,7 +17,8 @@ func newValidateCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
 			o := orchestrator.New(printer.New(cmd.OutOrStdout()))
-			if !o.PreFlight(constants.DefaultEnvFile, constants.DefaultExampleFile, cfg.Env.Schema) {
+			ok, _ := o.PreFlight(constants.DefaultEnvFile, constants.DefaultExampleFile, cfg.Env.Schema)
+			if !ok {
 				return fmt.Errorf("validation failed")
 			}
 			return nil

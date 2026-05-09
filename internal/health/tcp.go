@@ -19,24 +19,18 @@ func NewTCPChecker(host, port string, timeout, interval time.Duration) *TCPCheck
 }
 
 func (c *TCPChecker) Check(ctx context.Context) error {
-	deadline := time.Now().Add(c.timeout)
 	addr := net.JoinHostPort(c.host, c.port)
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
+
+	err := Poll(ctx, c.timeout, c.interval, func() error {
 		conn, err := net.DialTimeout("tcp", addr, c.interval)
-		if err == nil {
-			conn.Close()
-			return nil
+		if err != nil {
+			return err
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(c.interval):
-		}
+		conn.Close()
+		return nil
+	})
+	if err != nil && err != ctx.Err() {
+		return fmt.Errorf("tcp check timed out after %s: %s", c.timeout, addr)
 	}
-	return fmt.Errorf("tcp check timed out after %s: %s", c.timeout, addr)
+	return err
 }

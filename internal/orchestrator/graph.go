@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // Tier is a group of services that can start in parallel.
@@ -33,7 +34,12 @@ func BuildTiers(deps map[string][]string) ([]Tier, error) {
 			}
 		}
 		if len(tier) == 0 {
-			return nil, fmt.Errorf("cycle detected in service dependencies")
+			remaining := make([]string, 0, len(inDegree))
+			for svc := range inDegree {
+				remaining = append(remaining, svc)
+			}
+			sort.Strings(remaining)
+			return nil, fmt.Errorf("cycle detected in service dependencies involving: %s", strings.Join(remaining, ", "))
 		}
 		sort.Strings(tier)
 		tiers = append(tiers, tier)

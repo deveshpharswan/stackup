@@ -18,26 +18,25 @@ func NewHTTPChecker(url string, timeout, interval time.Duration) *HTTPChecker {
 }
 
 func (c *HTTPChecker) Check(ctx context.Context) error {
-	deadline := time.Now().Add(c.timeout)
-	client := &http.Client{Timeout: c.interval}
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		resp, err := client.Get(c.url)
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-				return nil
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(c.interval):
-		}
+	reqTimeout := c.interval
+	if reqTimeout < 5*time.Second {
+		reqTimeout = 5 * time.Second
 	}
-	return fmt.Errorf("http check timed out after %s: %s", c.timeout, c.url)
+	client := &http.Client{Timeout: reqTimeout}
+
+	err := Poll(ctx, c.timeout, c.interval, func() error {
+		resp, err := client.Get(c.url)
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return nil
+		}
+		return fmt.Errorf("status %d", resp.StatusCode)
+	})
+	if err != nil && err != ctx.Err() {
+		return fmt.Errorf("http check timed out after %s: %s", c.timeout, c.url)
+	}
+	return err
 }

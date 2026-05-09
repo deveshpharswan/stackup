@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/signal"
 
 	dockerclient "github.com/docker/docker/client"
 	"github.com/spf13/cobra"
@@ -43,7 +45,8 @@ func newCheckCmd() *cobra.Command {
 		Use:   "check",
 		Short: "Check health of services (CI-friendly, exits 0=healthy, 2=unhealthy)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer cancel()
 			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
 
 			dc, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())

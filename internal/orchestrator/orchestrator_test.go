@@ -26,7 +26,7 @@ func TestPreFlight_Valid(t *testing.T) {
 	t.Parallel()
 	buf := new(bytes.Buffer)
 	o := orchestrator.New(printer.New(buf))
-	ok := o.PreFlight(
+	ok, _ := o.PreFlight(
 		"../../testdata/.env.valid",
 		"../../testdata/.env.example",
 		map[string]config.EnvVar{
@@ -41,7 +41,7 @@ func TestPreFlight_Invalid(t *testing.T) {
 	t.Parallel()
 	buf := new(bytes.Buffer)
 	o := orchestrator.New(printer.New(buf))
-	ok := o.PreFlight("../../testdata/.env.missing-key", "../../testdata/.env.example", nil)
+	ok, _ := o.PreFlight("../../testdata/.env.missing-key", "../../testdata/.env.example", nil)
 	assert.False(t, ok)
 	assert.Contains(t, buf.String(), "API_KEY")
 }

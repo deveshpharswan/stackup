@@ -20,22 +20,18 @@ func NewDockerChecker(cli *dockerclient.Client, containerID string, timeout, int
 }
 
 func (c *DockerChecker) Check(ctx context.Context) error {
-	deadline := time.Now().Add(c.timeout)
-	for time.Now().Before(deadline) {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
+	err := Poll(ctx, c.timeout, c.interval, func() error {
 		info, err := c.cli.ContainerInspect(ctx, c.containerID)
-		if err == nil && info.State != nil && info.State.Health != nil && info.State.Health.Status == "healthy" {
+		if err != nil {
+			return err
+		}
+		if info.State != nil && info.State.Health != nil && info.State.Health.Status == "healthy" {
 			return nil
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(c.interval):
-		}
+		return fmt.Errorf("not healthy")
+	})
+	if err != nil && err != ctx.Err() {
+		return fmt.Errorf("docker health check timed out after %s for container %s", c.timeout, c.containerID)
 	}
-	return fmt.Errorf("docker health check timed out after %s for container %s", c.timeout, c.containerID)
+	return err
 }

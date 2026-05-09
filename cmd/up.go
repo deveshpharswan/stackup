@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -25,7 +26,8 @@ func newUpCmd() *cobra.Command {
 		Use:   "up",
 		Short: "Validate .env and start all services in health-gated order",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer cancel()
 			p := printer.New(cmd.OutOrStdout())
 			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
 			o := orchestrator.New(p)
@@ -37,8 +39,15 @@ func newUpCmd() *cobra.Command {
 				}
 			}
 
-			if !o.PreFlight(constants.DefaultEnvFile, constants.DefaultExampleFile, cfg.Env.Schema) {
+			ok, injected := o.PreFlight(constants.DefaultEnvFile, constants.DefaultExampleFile, cfg.Env.Schema)
+			if !ok {
 				return fmt.Errorf("pre-flight validation failed")
+			}
+
+			// Build environment for child processes: inherit current env + injected defaults
+			childEnv := os.Environ()
+			for key, val := range injected {
+				childEnv = append(childEnv, key+"="+val)
 			}
 
 			composeServices, err := scaffold.ParseServices(constants.DefaultComposeFile)
@@ -74,6 +83,7 @@ func newUpCmd() *cobra.Command {
 				startFn := func(ctx context.Context, svcs []string) error {
 					cmdArgs := append([]string{"compose", "up", "-d"}, svcs...)
 					c := exec.CommandContext(ctx, "docker", cmdArgs...)
+					c.Env = childEnv
 					c.Stdout = os.Stdout
 					c.Stderr = os.Stderr
 					return c.Run()

@@ -59,4 +59,6 @@ func TestBuildTiers_CycleDetected(t *testing.T) {
 	_, err := orchestrator.BuildTiers(deps)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cycle")
+	assert.Contains(t, err.Error(), "a")
+	assert.Contains(t, err.Error(), "b")
 }
