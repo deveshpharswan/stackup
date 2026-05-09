@@ -94,6 +94,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case ":":
 			m.command.Activate(ModeCommand)
 			return m, nil
+		case "/":
+			m.command.Activate(ModeFilter)
+			return m, nil
 		case "q":
 			if m.activeView == ViewServices {
 				m.quitting = true
@@ -121,6 +124,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ConfirmYesMsg:
 		m.showConfirm = false
+
+	case CommandResult:
+		if msg.IsQuit {
+			m.quitting = true
+			return m, tea.Quit
+		}
+		m = m.pushView(msg.View)
 	}
 
 	switch m.activeView {
