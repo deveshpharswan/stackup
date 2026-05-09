@@ -107,6 +107,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m = m.popView()
 			return m, nil
+		case "d":
+			if m.activeView == ViewServices {
+				m = m.pushView(ViewDoctor)
+				return m, m.doctor.Init()
+			}
 		case "l":
 			if m.activeView == ViewServices {
 				if svc := m.services.Selected(); svc != "" {
@@ -163,6 +168,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newLogs, cmd := m.logs.Start(msg.Arg, m.width, m.height-7)
 			m.logs = newLogs
 			return m, cmd
+		}
+		if msg.View == ViewDoctor {
+			m = m.pushView(ViewDoctor)
+			return m, m.doctor.Init()
 		}
 		m = m.pushView(msg.View)
 	}
