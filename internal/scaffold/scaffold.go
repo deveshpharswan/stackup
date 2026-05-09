@@ -16,6 +16,48 @@ type composeFile struct {
 
 type composeService struct {
 	DependsOn interface{} `yaml:"depends_on"`
+	Image     string      `yaml:"image"`
+}
+
+// HealthDefault holds the detected health check configuration for a known image.
+type HealthDefault struct {
+	Type string
+	Host string
+	Port int
+}
+
+var knownImages = map[string]HealthDefault{
+	"postgres":      {Type: "tcp", Host: "localhost", Port: 5432},
+	"redis":         {Type: "tcp", Host: "localhost", Port: 6379},
+	"mysql":         {Type: "tcp", Host: "localhost", Port: 3306},
+	"mariadb":       {Type: "tcp", Host: "localhost", Port: 3306},
+	"mongo":         {Type: "tcp", Host: "localhost", Port: 27017},
+	"elasticsearch": {Type: "tcp", Host: "localhost", Port: 9200},
+	"rabbitmq":      {Type: "tcp", Host: "localhost", Port: 5672},
+	"kafka":         {Type: "tcp", Host: "localhost", Port: 9092},
+	"nginx":         {Type: "http", Host: "localhost", Port: 80},
+	"memcached":     {Type: "tcp", Host: "localhost", Port: 11211},
+	"nats":          {Type: "tcp", Host: "localhost", Port: 4222},
+	"minio":         {Type: "tcp", Host: "localhost", Port: 9000},
+	"consul":        {Type: "http", Host: "localhost", Port: 8500},
+	"vault":         {Type: "tcp", Host: "localhost", Port: 8200},
+	"etcd":          {Type: "tcp", Host: "localhost", Port: 2379},
+	"zookeeper":     {Type: "tcp", Host: "localhost", Port: 2181},
+	"cockroachdb":   {Type: "tcp", Host: "localhost", Port: 26257},
+	"clickhouse":    {Type: "tcp", Host: "localhost", Port: 9000},
+}
+
+// DetectHealthDefault checks if the image name contains any known pattern.
+// Returns nil if no match found.
+func DetectHealthDefault(image string) *HealthDefault {
+	lower := strings.ToLower(image)
+	for pattern, def := range knownImages {
+		if strings.Contains(lower, pattern) {
+			d := def // copy
+			return &d
+		}
+	}
+	return nil
 }
 
 // ParseServices reads a docker-compose.yml and returns a map of service name to its dependency list.
@@ -89,7 +131,18 @@ func Generate(composeFilePath, exampleFile string) (string, error) {
 	}
 	sort.Strings(svcNames)
 	for _, name := range svcNames {
-		b.WriteString(fmt.Sprintf("  %s:\n    health:\n      type: tcp  # TODO: configure health check\n", name))
+		svc := cf.Services[name]
+		def := DetectHealthDefault(svc.Image)
+		if def != nil {
+			b.WriteString(fmt.Sprintf("  %s:\n    health:\n      type: %s\n", name, def.Type))
+			if def.Type == "tcp" {
+				b.WriteString(fmt.Sprintf("      host: %s\n      port: %d\n", def.Host, def.Port))
+			} else if def.Type == "http" {
+				b.WriteString(fmt.Sprintf("      url: http://%s:%d/\n", def.Host, def.Port))
+			}
+		} else {
+			b.WriteString(fmt.Sprintf("  %s:\n    health:\n      type: tcp  # TODO: set correct health check\n", name))
+		}
 	}
 
 	b.WriteString("\ncommands: {}\n")
