@@ -4,21 +4,12 @@ package scaffold
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
-
-func validatePath(path string) error {
-	cleaned := filepath.Clean(path)
-	if filepath.IsAbs(cleaned) {
-		return fmt.Errorf("absolute paths are not allowed: %s", path)
-	}
-	return nil
-}
 
 type composeFile struct {
 	Services map[string]composeService `yaml:"services"`
@@ -79,9 +70,6 @@ func DetectHealthDefault(image string) *HealthDefault {
 
 // ParseServices reads a docker-compose.yml and returns a map of service name to its dependency list.
 func ParseServices(composeFilePath string) (map[string][]string, error) {
-	if err := validatePath(composeFilePath); err != nil {
-		return nil, err
-	}
 	data, err := os.ReadFile(composeFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("reading compose file: %w", err)
@@ -100,9 +88,6 @@ func ParseServices(composeFilePath string) (map[string][]string, error) {
 // ParseServicesRich reads a docker-compose.yml and returns dependencies with conditions.
 // This allows stackup to understand if compose already expects service_healthy checks.
 func ParseServicesRich(composeFilePath string) (map[string][]Dependency, error) {
-	if err := validatePath(composeFilePath); err != nil {
-		return nil, err
-	}
 	data, err := os.ReadFile(composeFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("reading compose file: %w", err)
@@ -167,12 +152,6 @@ func parseDependsOnRich(v interface{}) []Dependency {
 // Generate creates a stackup.yml configuration from a docker-compose.yml file,
 // auto-detecting health check types for known images.
 func Generate(composeFilePath, exampleFile string) (string, error) {
-	if err := validatePath(composeFilePath); err != nil {
-		return "", err
-	}
-	if err := validatePath(exampleFile); err != nil {
-		return "", err
-	}
 	data, err := os.ReadFile(composeFilePath)
 	if err != nil {
 		return "", fmt.Errorf("reading compose file: %w", err)
