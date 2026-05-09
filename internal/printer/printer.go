@@ -245,15 +245,16 @@ func (p *Printer) SummaryTable(results []ServiceResult, total time.Duration) {
 
 // Spinner provides an animated progress indicator for long-running operations.
 type Spinner struct {
-	w       io.Writer
-	frames  []string
-	message string
-	mu      sync.Mutex
-	stop    chan struct{}
-	done    chan struct{}
-	active  bool
-	isTTY   bool
-	yellow  *color.Color
+	w        io.Writer
+	frames   []string
+	message  string
+	mu       sync.Mutex
+	stop     chan struct{}
+	done     chan struct{}
+	stopOnce sync.Once
+	active   bool
+	isTTY    bool
+	yellow   *color.Color
 }
 
 // NewSpinner creates a spinner that writes to the given writer.
@@ -306,7 +307,9 @@ func (s *Spinner) Stop() {
 	if !s.isTTY || !s.active {
 		return
 	}
-	close(s.stop)
+	s.stopOnce.Do(func() {
+		close(s.stop)
+	})
 	<-s.done
 	s.active = false
 }

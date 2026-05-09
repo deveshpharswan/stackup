@@ -128,3 +128,16 @@ func (c *Client) ExecShell(ctx context.Context, containerID string, in io.Reader
 	}
 	return fmt.Errorf("no shell found in container %s", containerID)
 }
+
+// ValidateServiceName checks that a service name conforms to Docker Compose naming rules.
+func ValidateServiceName(name string) error {
+	if name == "" {
+		return fmt.Errorf("service name cannot be empty")
+	}
+	for _, c := range name {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.') {
+			return fmt.Errorf("invalid service name %q: contains invalid character %q", name, c)
+		}
+	}
+	return nil
+}

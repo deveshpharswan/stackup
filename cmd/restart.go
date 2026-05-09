@@ -19,6 +19,9 @@ func newRestartCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			svcName := args[0]
+			if err := docker.ValidateServiceName(svcName); err != nil {
+				return err
+			}
 			c, err := docker.NewClient()
 			if err != nil {
 				return err

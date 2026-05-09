@@ -22,8 +22,11 @@ func NewHTTPChecker(url string, timeout, interval time.Duration) *HTTPChecker {
 // Check polls the HTTP endpoint until healthy or timeout.
 func (c *HTTPChecker) Check(ctx context.Context) error {
 	reqTimeout := c.interval
-	if reqTimeout < 5*time.Second {
-		reqTimeout = 5 * time.Second
+	if reqTimeout > 10*time.Second {
+		reqTimeout = 10 * time.Second
+	}
+	if reqTimeout < 2*time.Second {
+		reqTimeout = 2 * time.Second
 	}
 	client := &http.Client{Timeout: reqTimeout}
 

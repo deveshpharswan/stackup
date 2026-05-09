@@ -3,7 +3,9 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"regexp"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -105,6 +107,10 @@ func (c *Config) Validate() error {
 			if hc.URL == "" {
 				return fmt.Errorf("service %q: http health check requires 'url' field", name)
 			}
+			u, err := url.Parse(hc.URL)
+			if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+				return fmt.Errorf("service %q: invalid health check URL %q (must be http:// or https://)", name, hc.URL)
+			}
 		case "tcp":
 			if hc.Host == "" || hc.Port == 0 {
 				return fmt.Errorf("service %q: tcp health check requires 'host' and 'port' fields", name)
@@ -115,6 +121,9 @@ func (c *Config) Validate() error {
 		case "log":
 			if hc.Pattern == "" {
 				return fmt.Errorf("service %q: log health check requires 'pattern' field", name)
+			}
+			if _, err := regexp.Compile(hc.Pattern); err != nil {
+				return fmt.Errorf("service %q: invalid log pattern %q: %w", name, hc.Pattern, err)
 			}
 		}
 		if hc.Timeout != "" {
