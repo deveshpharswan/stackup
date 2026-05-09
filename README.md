@@ -1,153 +1,191 @@
 # Stackup
 
-Smart Docker Compose orchestration for development teams.
+**Stop debugging Docker startup failures. Start building.**
 
-Stackup wraps your existing `docker-compose.yml` with health-gated startup, `.env` validation, automated diagnostics, and developer shortcuts — configured via a `stackup.yml` sidecar file.
+[Install](#install) · [Quick Start](#quick-start) · [Commands](#commands) · [Configuration](#configuration)
 
-## Why
+---
 
-Docker Compose `depends_on` only waits for containers to *start*, not for services to be *ready*. Your API connects to Postgres before it accepts connections. You get cryptic errors, restart loops, and lost time.
+## The Problem
 
-Stackup fixes this by grouping services into tiers and waiting for health checks to pass before starting the next tier.
+You run `docker compose up`. Your API tries to connect to Postgres — but Postgres isn't ready yet. You get:
+
+```text
+Error: ECONNREFUSED 127.0.0.1:5432
+```
+
+Docker Compose `depends_on` only waits for containers to **start**, not for services to be **ready**. So every morning you restart things, wait, check logs, restart again. New team members spend their first day fighting this instead of shipping code.
+
+## The Fix
+
+Stackup wraps your existing `docker-compose.yml` and adds what's missing:
+
+- **Health-gated startup** — services start only after their dependencies are actually ready (not just running)
+- **Environment validation** — catches missing `.env` keys before anything starts
+- **Failure diagnostics** — when something breaks, tells you exactly why and how to fix it
+- **Interactive TUI** — a real-time dashboard for your entire stack (like k9s for your dev environment)
+
+No changes to your `docker-compose.yml` required. Add a `stackup.yml` sidecar and go.
+
+---
 
 ## Install
+
+### Homebrew (macOS/Linux)
+
+```bash
+brew install deveshpharswan/tap/stackup
+```
+
+### Go
 
 ```bash
 go install github.com/deveshpharswan/stackup@latest
 ```
 
-Or build from source:
+### From Source
 
 ```bash
 git clone https://github.com/deveshpharswan/stackup.git
 cd stackup
-go build -ldflags "-X main.version=dev" -o stackup .
+go build -o stackup .
 ```
+
+### Verify
+
+```bash
+stackup version
+```
+
+---
 
 ## Quick Start
 
-```bash
-# Generate config from your existing compose file
-stackup init
+**1. You already have a `docker-compose.yml`** — Stackup works alongside it.
 
-# Edit stackup.yml to set correct health check types
-# Then start everything with validation
+**2. Generate a config:**
+
+```bash
+stackup init
+```
+
+This creates `stackup.yml` by detecting your services and their health check types automatically (Postgres → TCP 5432, Redis → TCP 6379, etc).
+
+**3. Start your stack:**
+
+```bash
 stackup up
 ```
 
-## What Happens When You Run `stackup up`
+That's it. Stackup handles the rest.
 
-```text
+---
+
+## What It Looks Like
+
+### Successful startup
+
+```
 $ stackup up
 
 → Pre-flight
   ✓ .env validated (4 keys, 0 missing)
   ✓ DATABASE_URL — valid url
   ✓ PORT — valid int
-  ℹ TIMEOUT — using default: 30
 
-→ Starting tier
-  ✓ postgres     healthy  [tcp:5432]  2.3s
-  ✓ redis        healthy  [tcp:6379]  1.1s
+→ Starting tier 1
+  ✓ postgres     healthy  [tcp:5432]         2.3s
+  ✓ redis        healthy  [tcp:6379]         1.1s
 
-→ Starting tier  (depends on: postgres, redis)
-  ✓ api          healthy  [http:http://localhost:8080/health]  4.7s
-    → hook: Run migrations
-    ✓ Run migrations
+→ Starting tier 2  (depends on: postgres, redis)
+  ✓ api          healthy  [http:8080/health] 4.7s
+    → hook: Run migrations ✓
 
 ✓ Stack ready in 8.1s
 ```
 
-If something fails, Stackup shows you why immediately:
+### When something fails
 
 ```text
-  ✗ api          failed: http check timed out after 60s
-  ┌── logs: api ──
-  │ Error: Cannot connect to postgres: ECONNREFUSED 127.0.0.1:5432
-  └────
+$ stackup up
+
+→ Starting tier 2
+  ✗ api          failed — http check timed out after 60s
+
+  ┌─── logs: api ─────────────────────────────────────────────┐
+  │ Error: Cannot connect to postgres: ECONNREFUSED            │
+  │ at TCPConnectWrap.afterConnect (net.js:1141:16)            │
+  └────────────────────────────────────────────────────────────┘
 
   ⚠ Services still running: postgres, redis
     To clean up: stackup down
+
   Try:
-    • stackup doctor
-    • stackup logs api
+    • stackup doctor    — run diagnostics
+    • stackup logs api  — see full logs
 ```
 
-## Features
+No more guessing. You see the error, the context, and the next step.
 
-### Health-Gated Startup
+---
 
-Services start in dependency order using topological sort (Kahn's algorithm). Each tier waits for health checks to pass before the next tier starts. Health checks within a tier run **in parallel** for faster startup.
+## Interactive TUI
 
-### Environment Validation
-
-Validates `.env` against a schema before starting anything. Catches missing keys, type mismatches (url, int, bool), and drift from `.env.example`. Schema defaults are injected automatically.
-
-### Failure Diagnostics
-
-When a health check fails, Stackup automatically surfaces the last 20 lines of container logs and suggests next steps (`stackup doctor`, `stackup logs <svc>`).
-
-### Automated Doctor
-
-`stackup doctor` runs diagnostic checks: port conflicts, environment drift, localhost misuse in Docker, crash loops, and more.
-
-### Team Onboarding
-
-When `.env` doesn't exist, `stackup up` walks new developers through creating it interactively — using schema defaults and `.env.example` as a guide.
-
-### Lifecycle Hooks
-
-Run commands after a service becomes healthy (e.g., database migrations):
-
-```yaml
-services:
-  postgres:
-    hooks:
-      after_start:
-        - name: "Run migrations"
-          service: api
-          run: "npm run db:migrate"
+```bash
+stackup ui
 ```
 
-### CI Health Check
+A real-time terminal dashboard (like lazydocker / k9s) for your dev stack:
 
-`stackup check` exits 0 if all services are healthy, exit 2 if not. Supports `--format json`, `--service <name>`, and `--quiet` flags.
-
-### Smart Init
-
-`stackup init` detects known Docker images (postgres, redis, mysql, mongo, elasticsearch, etc.) and auto-generates correct health check configuration.
-
-### Log-Based Health Checks
-
-For services without HTTP or TCP readiness signals, watch container logs for a pattern:
-
-```yaml
-postgres:
-  health:
-    type: log
-    pattern: "database system is ready to accept connections"
-    timeout: 30s
+```text
+┌─ Stackup ─────────────────────────────── 5 services │ 3 tiers ─┐
+│                                                                  │
+│  SERVICE       STATUS      HEALTH     UPTIME                     │
+│  ─────────────────────────────────────────────────               │
+│  postgres      running     healthy    2h 15m                     │
+│  redis         running     healthy    2h 15m                     │
+│  api           running     healthy    1h 03m                     │
+│  worker        running     healthy    1h 03m                     │
+│  nginx         running     healthy    58m                        │
+│                                                                  │
+│  [enter] logs  [r] restart  [d] describe  [g] graph  [?] help   │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+**Features:**
+
+- Live service status with health indicators
+- Stream logs for any service (with color-coded output)
+- Restart services and re-run health checks
+- Dependency graph visualization
+- Doctor diagnostics panel
+- Filter services with `/`
+- Keyboard-driven — no mouse needed
+
+---
 
 ## Commands
 
-| Command | Description |
-| ------- | ----------- |
-| `stackup up` | Validate env, start services in health-gated tier order |
+| Command | What it does |
+| ------- | ------------ |
+| `stackup up` | Validate env → start services in health-gated order |
 | `stackup down` | Stop all containers |
-| `stackup validate` | Check `.env` without starting services |
+| `stackup ui` | Open interactive terminal dashboard |
 | `stackup status` | Show running container states |
-| `stackup doctor` | Automated diagnostics (port conflicts, crash loops, env drift) |
-| `stackup check` | CI-friendly health check (exit 0 = healthy, exit 2 = unhealthy) |
-| `stackup init` | Generate `stackup.yml` from your compose file |
-| `stackup logs <svc>` | Stream logs for a service |
-| `stackup shell <svc>` | Open interactive shell in a container |
-| `stackup restart <svc>` | Restart and re-check health |
-| `stackup run <cmd>` | Run a named command from config |
+| `stackup doctor` | Run diagnostics (port conflicts, env drift, crash loops) |
+| `stackup check` | CI health check — exit 0 if healthy, exit 2 if not |
+| `stackup init` | Auto-generate `stackup.yml` from your compose file |
+| `stackup validate` | Check `.env` without starting services |
+| `stackup logs <svc>` | Stream logs for a service (`-f` to follow) |
+| `stackup shell <svc>` | Open interactive shell inside a container |
+| `stackup restart <svc>` | Restart a service and re-run its health check |
+| `stackup run <cmd>` | Run a named command defined in config |
+
+---
 
 ## Configuration
 
-Create `stackup.yml` alongside your `docker-compose.yml`:
+Create `stackup.yml` next to your `docker-compose.yml`:
 
 ```yaml
 version: "1"
@@ -176,32 +214,57 @@ services:
         - name: "Run migrations"
           service: api
           run: "npm run db:migrate"
+
+  redis:
+    health:
+      type: tcp
+      host: localhost
+      port: 6379
+
   api:
     health:
       type: http
       url: http://localhost:8080/health
       timeout: 60s
-  redis:
-    health:
-      type: docker
-      timeout: 20s
 
 commands:
   seed:
     service: api
     run: "npm run db:seed"
+  test:
+    service: api
+    run: "npm test"
 ```
 
-## Health Check Types
+### Health Check Types
 
-| Type | Use Case | Required Fields |
-| ---- | -------- | --------------- |
+| Type | When to use | Config |
+| ---- | ----------- | ------ |
+| `tcp` | Databases, caches, message brokers | `host` + `port` |
 | `http` | APIs with health endpoints | `url` |
-| `tcp` | Databases, caches | `host`, `port` |
-| `docker` | Images with built-in HEALTHCHECK | — |
-| `log` | Services that log readiness | `pattern` |
+| `docker` | Images with built-in `HEALTHCHECK` | — (uses Docker's native check) |
+| `log` | Services that print readiness to stdout | `pattern` (regex) |
+
+### Log-Based Health Check Example
+
+For services that don't expose a port but log when they're ready:
+
+```yaml
+services:
+  worker:
+    health:
+      type: log
+      pattern: "ready to accept connections"
+      timeout: 30s
+```
+
+---
 
 ## Diagnostics
+
+```bash
+stackup doctor
+```
 
 ```text
 $ stackup doctor
@@ -214,57 +277,66 @@ $ stackup doctor
     Keys in .env.example but not in .env: STRIPE_KEY, NEW_RELIC_KEY
     Fix: Add missing keys to .env
 
-  ⚠ Localhost reference in DATABASE_URL may not work inside containers
-    Found "localhost:5432" — inside Docker, use the service name "postgres" instead
-    Fix: Replace localhost:5432 with postgres:5432 in DATABASE_URL
+  ⚠ Localhost in DATABASE_URL won't work inside containers
+    Found "localhost:5432" — use service name "postgres" instead
+    Fix: Replace localhost:5432 with postgres:5432
+
+  ✓ No crash loops detected
+  ✓ All health check ports are reachable
 ```
+
+---
+
+## Team Onboarding
+
+When a new developer clones the repo and runs `stackup up` without a `.env` file, Stackup walks them through setup interactively:
+
+```text
+Welcome to Stackup! You don't have a .env file yet.
+
+The following variables are needed:
+  DATABASE_URL  (example: postgres://localhost/db)
+  PORT          [default: 3000]
+  LOG_LEVEL     [default: info]
+
+Create .env now? [Y/n]
+```
+
+No more Slack messages asking "what goes in `.env`?"
+
+---
 
 ## CI Usage
 
-```bash
-stackup up
-stackup check --quiet    # exit 0 if healthy, exit 2 if not
-stackup check --format json --service postgres
+```yaml
+# In your CI pipeline
+- run: stackup up
+- run: stackup check --quiet
+# exit 0 = all healthy, exit 2 = something's wrong
+
+# Check specific service as JSON
+- run: stackup check --format json --service postgres
 ```
 
-## First-Time Onboarding
+---
 
-When `.env` doesn't exist, `stackup up` automatically walks new developers through creating it:
+## How It Works
 
-```text
-Welcome to Stackup! It looks like you don't have a .env file yet.
+1. **Reads** your `docker-compose.yml` to understand service dependencies
+2. **Validates** `.env` against the schema in `stackup.yml`
+3. **Sorts** services into startup tiers using topological sort
+4. **Starts** each tier and polls health checks in parallel
+5. **Waits** for all checks in a tier to pass before starting the next
+6. **Runs hooks** (like migrations) after services become healthy
+7. **Reports** failures with logs and suggested fixes
 
-The following environment variables are needed:
-  DATABASE_URL (example: postgres://localhost/db)
-  PORT [default: 3000]
-
-Create your .env now? [Y/n]
-```
-
-## Project Structure
-
-```text
-main.go                 Entry point
-cmd/                    CLI commands (Cobra)
-internal/
-  config/               stackup.yml parser
-  constants/            Shared path constants
-  env/                  .env validation (diff + type checking)
-  orchestrator/         Dependency graph + health-gated startup
-  health/               Health checkers (HTTP, TCP, Docker, Log)
-  docker/               Docker SDK wrapper
-  doctor/               Automated diagnostic checks
-  hooks/                Lifecycle hook executor
-  onboard/              First-run interactive setup
-  printer/              Terminal output formatting
-  scaffold/             stackup init generator
-```
+---
 
 ## Prerequisites
 
-- Go 1.22+ (build from source)
 - Docker Engine with `docker compose` v2
 - A `docker-compose.yml` in your project
+- Go 1.23+ (only if building from source)
 
 ## License
 
