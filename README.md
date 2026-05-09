@@ -85,7 +85,7 @@ That's it. Stackup handles the rest.
 
 ### Successful startup
 
-```
+```text
 $ stackup up
 
 → Pre-flight
@@ -112,10 +112,10 @@ $ stackup up
 → Starting tier 2
   ✗ api          failed — http check timed out after 60s
 
-  ┌─── logs: api ─────────────────────────────────────────────┐
-  │ Error: Cannot connect to postgres: ECONNREFUSED            │
-  │ at TCPConnectWrap.afterConnect (net.js:1141:16)            │
-  └────────────────────────────────────────────────────────────┘
+  --- logs: api ---------------------------------
+  Error: Cannot connect to postgres: ECONNREFUSED
+  at TCPConnectWrap.afterConnect (net.js:1141:16)
+  -----------------------------------------------
 
   ⚠ Services still running: postgres, redis
     To clean up: stackup down
@@ -138,18 +138,17 @@ stackup ui
 A real-time terminal dashboard (like lazydocker / k9s) for your dev stack:
 
 ```text
-┌─ Stackup ─────────────────────────────── 5 services │ 3 tiers ─┐
-│                                                                  │
-│  SERVICE       STATUS      HEALTH     UPTIME                     │
-│  ─────────────────────────────────────────────────               │
-│  postgres      running     healthy    2h 15m                     │
-│  redis         running     healthy    2h 15m                     │
-│  api           running     healthy    1h 03m                     │
-│  worker        running     healthy    1h 03m                     │
-│  nginx         running     healthy    58m                        │
-│                                                                  │
-│  [enter] logs  [r] restart  [d] describe  [g] graph  [?] help   │
-└──────────────────────────────────────────────────────────────────┘
+ Stackup                              5 services | 3 tiers
+------------------------------------------------------------
+ SERVICE       STATUS      HEALTH     UPTIME
+ postgres      running     healthy    2h 15m
+ redis         running     healthy    2h 15m
+ api           running     healthy    1h 03m
+ worker        running     healthy    1h 03m
+ nginx         running     healthy    58m
+
+ [enter] logs  [r] restart  [d] describe  [g] graph  [?] help
+------------------------------------------------------------
 ```
 
 **Features:**
