@@ -115,7 +115,11 @@ func (m ServicesModel) View(width, height int) string {
 	b.WriteString(styleDim.Render("  "+strings.Repeat("─", width-4)) + "\n")
 
 	for i, svc := range m.filtered {
-		if i >= height-3 {
+		maxRows := height - 3
+		if m.errorZoom {
+			maxRows--
+		}
+		if i >= maxRows {
 			break
 		}
 		row := m.renderRow(svc, i == m.cursor, width)
@@ -206,7 +210,7 @@ func (m ServicesModel) ErrorZoom() bool {
 	return m.errorZoom
 }
 
-	func (m *ServicesModel) applyFilter() {
+func (m *ServicesModel) applyFilter() {
 	var base []ServiceInfo
 	if m.errorZoom {
 		for _, s := range m.services {

@@ -73,9 +73,16 @@ func newUpCmd() *cobra.Command {
 
 			// Filter by --only if specified
 			if only != "" {
-				onlySvcs := strings.Split(only, ",")
-				for i := range onlySvcs {
-					onlySvcs[i] = strings.TrimSpace(onlySvcs[i])
+				parts := strings.Split(only, ",")
+				var onlySvcs []string
+				for _, p := range parts {
+					p = strings.TrimSpace(p)
+					if p != "" {
+						onlySvcs = append(onlySvcs, p)
+					}
+				}
+				if len(onlySvcs) == 0 {
+					return fmt.Errorf("--only requires at least one service name")
 				}
 				for _, svc := range onlySvcs {
 					if _, exists := composeServices[svc]; !exists {

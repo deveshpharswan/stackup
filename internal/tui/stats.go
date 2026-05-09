@@ -57,6 +57,24 @@ func renderSparkline(values []float64, maxVal float64) string {
 
 func pollStats() tea.Cmd {
 	return func() tea.Msg {
+		// First get service→container mapping via labels
+		psCmd := exec.Command("docker", "ps", "--format", "{{.Names}}\t{{.Label \"com.docker.compose.service\"}}")
+		psOut, err := psCmd.Output()
+		if err != nil {
+			return StatsUpdateMsg{Stats: nil}
+		}
+		containerToService := make(map[string]string)
+		scanner := bufio.NewScanner(strings.NewReader(string(psOut)))
+		for scanner.Scan() {
+			parts := strings.SplitN(scanner.Text(), "\t", 2)
+			if len(parts) == 2 && parts[1] != "" {
+				containerToService[parts[0]] = parts[1]
+			}
+		}
+		if len(containerToService) == 0 {
+			return StatsUpdateMsg{Stats: nil}
+		}
+
 		c := exec.Command("docker", "stats", "--no-stream", "--format", "{{.Name}}\t{{.CPUPerc}}\t{{.MemPerc}}")
 		out, err := c.Output()
 		if err != nil {
@@ -64,29 +82,24 @@ func pollStats() tea.Cmd {
 		}
 
 		stats := make(map[string]ServiceStats)
-		scanner := bufio.NewScanner(strings.NewReader(string(out)))
+		scanner = bufio.NewScanner(strings.NewReader(string(out)))
 		for scanner.Scan() {
 			line := scanner.Text()
 			parts := strings.SplitN(line, "\t", 3)
 			if len(parts) < 3 {
 				continue
 			}
-			name := extractServiceName(parts[0])
+			containerName := strings.TrimSpace(parts[0])
+			svcName, ok := containerToService[containerName]
+			if !ok {
+				continue
+			}
 			cpu := parsePercent(parts[1])
 			mem := parsePercent(parts[2])
-			stats[name] = ServiceStats{CPU: cpu, Memory: mem}
+			stats[svcName] = ServiceStats{CPU: cpu, Memory: mem}
 		}
 		return StatsUpdateMsg{Stats: stats}
 	}
-}
-
-func extractServiceName(containerName string) string {
-	name := strings.TrimPrefix(containerName, "/")
-	parts := strings.Split(name, "-")
-	if len(parts) >= 2 {
-		return strings.Join(parts[1:len(parts)-1], "-")
-	}
-	return name
 }
 
 func parsePercent(s string) float64 {
