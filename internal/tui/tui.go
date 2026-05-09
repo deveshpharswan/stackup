@@ -41,8 +41,7 @@ type Model struct {
 	showHelp    bool
 	showConfirm bool
 
-	serviceNames []string
-	quitting     bool
+	quitting bool
 }
 
 func NewModel() Model {
@@ -74,6 +73,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showConfirm {
 			newConfirm, cmd := m.confirm.Update(msg)
 			m.confirm = newConfirm
+			if !m.confirm.active {
+				m.showConfirm = false
+			}
 			return m, cmd
 		}
 		if m.showHelp {
@@ -86,6 +88,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.command.Active() {
 			newCmd, cmd := m.command.Update(msg)
 			m.command = newCmd
+			m.services = m.services.SetFilter(m.command.Filter())
 			cmds = append(cmds, cmd)
 			return m, tea.Batch(cmds...)
 		}
@@ -105,6 +108,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 		case "esc":
+			if m.activeView == ViewLogs {
+				m.logs.Stop()
+			}
 			m = m.popView()
 			return m, nil
 		case "d":
@@ -140,6 +146,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
+	case ServiceUpdateMsg:
+		if msg.Err == nil {
+			names := make([]string, len(msg.Services))
+			for i, s := range msg.Services {
+				names[i] = s.Name
+			}
+			m.command.SetServiceNames(names)
+		}
 
 	case ToastMsg:
 		m.toast = m.toast.Show(msg.Text)
@@ -200,11 +215,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.pushView(msg.View)
 	}
 
-	switch m.activeView {
-	case ViewServices:
+	switch msg.(type) {
+	case TickMsg, ServiceUpdateMsg:
 		newSvc, cmd := m.services.Update(msg)
 		m.services = newSvc
 		cmds = append(cmds, cmd)
+	}
+
+	switch m.activeView {
+	case ViewServices:
+		switch msg.(type) {
+		case TickMsg, ServiceUpdateMsg:
+		default:
+			newSvc, cmd := m.services.Update(msg)
+			m.services = newSvc
+			cmds = append(cmds, cmd)
+		}
 	case ViewLogs:
 		newLogs, cmd := m.logs.Update(msg)
 		m.logs = newLogs

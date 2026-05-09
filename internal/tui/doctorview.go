@@ -68,8 +68,8 @@ func (m DoctorViewModel) View(width, height int) string {
 
 	var b strings.Builder
 
-	header := fmt.Sprintf("  %-4s %-18s %-12s %-30s %s",
-		"SEV", "CHECK", "SERVICE", "FINDING", "FIX")
+	header := fmt.Sprintf("  %-4s %-12s %-30s %s",
+		"SEV", "SERVICE", "FINDING", "FIX")
 	b.WriteString(styleInfo.Bold(true).Render(header) + "\n")
 	b.WriteString(styleDim.Render("  "+strings.Repeat("─", width-4)) + "\n")
 
@@ -137,8 +137,8 @@ func (m DoctorViewModel) renderFinding(f doctor.Finding, selected bool, width in
 		title = title[:27] + "..."
 	}
 
-	row := fmt.Sprintf("  %-4s %-18s %-12s %-30s %s",
-		sevIcon, "", svc, title, fix)
+	row := fmt.Sprintf("  %-4s %-12s %-30s %s",
+		sevIcon, svc, title, fix)
 
 	if selected {
 		return styleSelected.Width(width).Render(row)

@@ -42,6 +42,10 @@ func (m HeaderModel) Update(msg tea.Msg) (HeaderModel, tea.Cmd) {
 			}
 			m.healthy = healthy
 		}
+	case graphDataMsg:
+		if msg.err == nil {
+			m.tiers = len(msg.tiers)
+		}
 	}
 	return m, nil
 }
@@ -56,10 +60,15 @@ func (m HeaderModel) View(width int, active ViewType) string {
 		healthStr = styleWarning.Render(healthStr)
 	}
 
+	tierStr := "—"
+	if m.tiers > 0 {
+		tierStr = fmt.Sprintf("%d", m.tiers)
+	}
+
 	left := strings.Join([]string{
 		styleHealthy.Render("Stack:") + "   " + m.stack,
 		styleHealthy.Render("Compose:") + " " + m.compose,
-		styleHealthy.Render("Tiers:") + "   " + fmt.Sprintf("%d", m.tiers),
+		styleHealthy.Render("Tiers:") + "   " + tierStr,
 		styleHealthy.Render("Health:") + "  " + healthStr,
 		styleHealthy.Render("Uptime:") + "  " + formatUptime(uptime),
 	}, "\n")

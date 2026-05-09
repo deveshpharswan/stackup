@@ -3,7 +3,6 @@ package tui
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"os/exec"
 	"strings"
 
@@ -16,6 +15,7 @@ type LogsModel struct {
 	viewport   viewport.Model
 	lines      []string
 	cancel     context.CancelFunc
+	logCh      <-chan string
 	timestamps bool
 	wrap       bool
 	ready      bool
@@ -26,6 +26,7 @@ func NewLogsModel() LogsModel {
 }
 
 func (m LogsModel) Start(service string, width, height int) (LogsModel, tea.Cmd) {
+	m.Stop()
 	vp := viewport.New(width, height)
 	vp.SetContent("")
 	m.service = service
@@ -33,7 +34,12 @@ func (m LogsModel) Start(service string, width, height int) (LogsModel, tea.Cmd)
 	m.lines = nil
 	m.ready = true
 	m.timestamps = true
-	return m, m.streamLogs()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
+	ch := startLogStream(ctx, service)
+	m.logCh = ch
+	return m, waitForLogLine(ch)
 }
 
 func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
@@ -45,10 +51,12 @@ func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 		}
 		m.viewport.SetContent(m.renderLines())
 		m.viewport.GotoBottom()
-		return m, nil
+		return m, waitForLogLine(m.logCh)
 	case LogErrMsg:
-		m.lines = append(m.lines, styleFailed.Render("Stream error: "+msg.Err.Error()))
-		m.viewport.SetContent(m.renderLines())
+		if msg.Err != nil {
+			m.lines = append(m.lines, styleFailed.Render("Stream error: "+msg.Err.Error()))
+			m.viewport.SetContent(m.renderLines())
+		}
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -92,41 +100,67 @@ func (m *LogsModel) Stop() {
 		m.cancel()
 		m.cancel = nil
 	}
+	m.logCh = nil
 }
 
-func (m LogsModel) streamLogs() tea.Cmd {
-	service := m.service
-	return func() tea.Msg {
-		ctx, cancel := context.WithCancel(context.Background())
-		_ = cancel
-
-		c := exec.CommandContext(ctx, "docker", "compose", "logs", "-f", "--tail", "100", service)
+func startLogStream(ctx context.Context, service string) <-chan string {
+	ch := make(chan string, 64)
+	go func() {
+		defer close(ch)
+		c := exec.CommandContext(ctx, "docker", "compose", "logs", "-f", "--tail", "100", "--timestamps", service)
 		stdout, err := c.StdoutPipe()
 		if err != nil {
-			return LogErrMsg{Err: err}
+			return
 		}
 		if err := c.Start(); err != nil {
-			return LogErrMsg{Err: err}
+			return
 		}
-
 		scanner := bufio.NewScanner(stdout)
-		if scanner.Scan() {
-			return LogLineMsg{Line: scanner.Text()}
+		for scanner.Scan() {
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- scanner.Text():
+			}
 		}
-		if err := scanner.Err(); err != nil {
-			return LogErrMsg{Err: err}
+		_ = c.Wait()
+	}()
+	return ch
+}
+
+func waitForLogLine(ch <-chan string) tea.Cmd {
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		line, ok := <-ch
+		if !ok {
+			return LogErrMsg{Err: nil}
 		}
-		return LogErrMsg{Err: fmt.Errorf("log stream ended")}
+		return LogLineMsg{Line: line}
 	}
 }
 
 func (m LogsModel) renderLines() string {
 	var b strings.Builder
 	for _, line := range m.lines {
-		rendered := m.colorLogLine(line)
+		display := line
+		if !m.timestamps {
+			display = stripTimestamp(display)
+		}
+		rendered := m.colorLogLine(display)
 		b.WriteString(rendered + "\n")
 	}
 	return b.String()
+}
+
+func stripTimestamp(line string) string {
+	if len(line) > 31 && line[4] == '-' && line[10] == 'T' {
+		if idx := strings.IndexByte(line[20:], ' '); idx >= 0 {
+			return line[20+idx+1:]
+		}
+	}
+	return line
 }
 
 func (m LogsModel) colorLogLine(line string) string {

@@ -214,6 +214,7 @@ func pollServices() tea.Cmd {
 			}
 			if len(parts) >= 3 {
 				svc.Health = parseHealthStatus(parts[2])
+				svc.Uptime = parseUptime(parts[2])
 			}
 			if len(parts) >= 4 {
 				svc.Ports = strings.TrimSpace(parts[3])
@@ -227,15 +228,40 @@ func pollServices() tea.Cmd {
 func parseHealthStatus(status string) string {
 	lower := strings.ToLower(status)
 	switch {
-	case strings.Contains(lower, "healthy"):
-		return "healthy"
 	case strings.Contains(lower, "unhealthy"):
 		return "unhealthy"
+	case strings.Contains(lower, "healthy"):
+		return "healthy"
 	case strings.Contains(lower, "starting"):
 		return "starting"
 	default:
 		return "(none)"
 	}
+}
+
+func parseUptime(status string) time.Duration {
+	lower := strings.ToLower(status)
+	if !strings.Contains(lower, "up") {
+		return 0
+	}
+	re := regexp.MustCompile(`up\s+(?:about\s+)?(\d+)\s*(second|minute|hour|day)`)
+	matches := re.FindStringSubmatch(lower)
+	if len(matches) < 3 {
+		return 0
+	}
+	n := 0
+	fmt.Sscanf(matches[1], "%d", &n)
+	switch matches[2] {
+	case "second":
+		return time.Duration(n) * time.Second
+	case "minute":
+		return time.Duration(n) * time.Minute
+	case "hour":
+		return time.Duration(n) * time.Hour
+	case "day":
+		return time.Duration(n) * 24 * time.Hour
+	}
+	return 0
 }
 
 func tickEvery(d time.Duration) tea.Cmd {

@@ -50,7 +50,9 @@ func (m GraphModel) Update(msg tea.Msg) (GraphModel, tea.Cmd) {
 			m.deps = msg.deps
 		}
 	case ServiceUpdateMsg:
-		m.services = msg.Services
+		if msg.Err == nil {
+			m.services = msg.Services
+		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
@@ -73,9 +75,8 @@ func (m GraphModel) View(width, height int) string {
 	var b strings.Builder
 
 	b.WriteString("\n")
-	for i, tier := range m.tiers {
+	for i := range m.tiers {
 		tierNum := i + 1
-		_ = tier
 		label := fmt.Sprintf("Tier %d", tierNum)
 		b.WriteString(styleDim.Render(fmt.Sprintf("        %-20s", label)))
 	}
@@ -104,8 +105,14 @@ func (m GraphModel) View(width, height int) string {
 				icon := m.iconFor(health)
 				boxStyle := m.styleFor(health, focused)
 
+				name := svc
+				if len(name) > 10 {
+					name = name[:9] + "…"
+				}
+				pad := strings.Repeat(" ", 10-len(name))
+
 				top := "  ┌──────────────┐  "
-				mid := fmt.Sprintf("  │ %s %-10s │  ", icon, svc)
+				mid := "  │ " + icon + " " + name + pad + " │  "
 				bot := "  └──────────────┘  "
 
 				if !focused {

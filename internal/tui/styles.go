@@ -20,8 +20,6 @@ var (
 	colorBlue   = lipgloss.Color("#58a6ff")
 	colorDim    = lipgloss.Color("#484f58")
 	colorWhite  = lipgloss.Color("#c9d1d9")
-	colorBg     = lipgloss.Color("#0d1117")
-	colorBgAlt  = lipgloss.Color("#161b22")
 	colorBorder = lipgloss.Color("#30363d")
 
 	styleHeader = lipgloss.NewStyle().
