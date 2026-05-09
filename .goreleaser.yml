@@ -57,3 +57,11 @@ brews:
       bin.install "stackup"
     test: |
       system "#{bin}/stackup", "version"
+
+scoops:
+  - repository:
+      owner: deveshpharswan
+      name: scoop-stackup
+    homepage: "https://github.com/deveshpharswan/stackup"
+    description: "Smart Docker Compose orchestration for development teams"
+    license: MIT

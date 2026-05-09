@@ -31,31 +31,59 @@ No changes to your `docker-compose.yml` required. Add a `stackup.yml` sidecar an
 
 ## Install
 
-### Homebrew (macOS/Linux)
+### macOS / Linux (quick)
+
+```bash
+curl -sSL https://raw.githubusercontent.com/deveshpharswan/stackup/master/install.sh | sh
+```
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/deveshpharswan/stackup/master/install.ps1 | iex
+```
+
+### macOS (Homebrew)
 
 ```bash
 brew install deveshpharswan/tap/stackup
 ```
 
-### Go
+### Windows (Scoop)
+
+```powershell
+scoop bucket add stackup https://github.com/deveshpharswan/scoop-stackup
+scoop install stackup
+```
+
+### Manual Download
+
+Download the binary for your platform from [GitHub Releases](https://github.com/deveshpharswan/stackup/releases/latest), extract it, and add it to your PATH.
+
+| Platform | File |
+| -------- | ---- |
+| macOS (Apple Silicon) | `stackup_*_darwin_arm64.tar.gz` |
+| macOS (Intel) | `stackup_*_darwin_amd64.tar.gz` |
+| Linux (x64) | `stackup_*_linux_amd64.tar.gz` |
+| Linux (ARM) | `stackup_*_linux_arm64.tar.gz` |
+| Windows (x64) | `stackup_*_windows_amd64.zip` |
+| Windows (ARM) | `stackup_*_windows_arm64.zip` |
+
+### From Source
 
 ```bash
 go install github.com/deveshpharswan/stackup@latest
 ```
 
-### From Source
-
-```bash
-git clone https://github.com/deveshpharswan/stackup.git
-cd stackup
-go build -o stackup .
-```
+> Note: `stackup version` shows "dev" when built this way. Use a released binary for proper version info.
 
 ### Verify
 
 ```bash
 stackup version
 ```
+
+> **Requires:** Docker Desktop (Windows/macOS) or Docker Engine (Linux) with `docker compose` v2.
 
 ---
 
@@ -336,7 +364,8 @@ No more Slack messages asking "what goes in `.env`?"
 
 ## Prerequisites
 
-- Docker Engine with `docker compose` v2
+- **Windows/macOS:** Docker Desktop (includes `docker compose` v2)
+- **Linux:** Docker Engine with `docker compose` v2 plugin
 - A `docker-compose.yml` in your project
 - Go 1.23+ (only if building from source)
 
