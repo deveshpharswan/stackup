@@ -121,6 +121,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, cmd
 				}
 			}
+		case "g":
+			if m.activeView == ViewServices {
+				m = m.pushView(ViewGraph)
+				return m, m.graph.Init()
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -172,6 +177,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.View == ViewDoctor {
 			m = m.pushView(ViewDoctor)
 			return m, m.doctor.Init()
+		}
+		if msg.View == ViewGraph {
+			m = m.pushView(ViewGraph)
+			return m, m.graph.Init()
 		}
 		m = m.pushView(msg.View)
 	}
