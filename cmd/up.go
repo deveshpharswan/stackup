@@ -115,6 +115,15 @@ func buildCheckers(cfg *config.Config, dc *dockerclient.Client) map[string]healt
 			checkers[name] = health.Named{Checker: health.NewTCPChecker(hc.Host, fmt.Sprintf("%d", hc.Port), timeout, interval), Label: fmt.Sprintf("tcp:%d", hc.Port)}
 		case "docker":
 			checkers[name] = health.Named{Checker: health.NewDockerChecker(dc, name, timeout, interval), Label: "docker"}
+		case "log":
+			label := hc.Pattern
+			if len(label) > 40 {
+				label = label[:37] + "..."
+			}
+			checkers[name] = health.Named{
+				Checker: health.NewLogChecker(dc, name, hc.Pattern, timeout, interval),
+				Label:   "log:" + label,
+			}
 		}
 	}
 	return checkers

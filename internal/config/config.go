@@ -43,6 +43,7 @@ type HealthCheck struct {
 	URL      string `yaml:"url"`
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
+	Pattern  string `yaml:"pattern"`
 	Timeout  string `yaml:"timeout"`
 	Interval string `yaml:"interval"`
 }
