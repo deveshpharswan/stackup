@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stackup-dev/stackup/internal/config"
 	"github.com/stackup-dev/stackup/internal/health"
@@ -69,4 +70,56 @@ func TestStartTier_HealthCheckFails(t *testing.T) {
 	err := o.StartTier(context.Background(), orchestrator.Tier{"api"}, nil, func(_ context.Context, _ []string) error { return nil }, checkers, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "api")
+}
+
+// mockChecker is a configurable checker with a delay and optional error.
+type mockChecker struct {
+	delay time.Duration
+	err   error
+}
+
+func (m *mockChecker) Check(ctx context.Context) error {
+	time.Sleep(m.delay)
+	return m.err
+}
+
+func TestStartTier_ParallelHealthChecks(t *testing.T) {
+	buf := new(bytes.Buffer)
+	o := orchestrator.New(printer.New(buf))
+
+	checkers := map[string]health.Named{
+		"svc-a": {Checker: &mockChecker{delay: 100 * time.Millisecond}, Label: "tcp"},
+		"svc-b": {Checker: &mockChecker{delay: 100 * time.Millisecond}, Label: "tcp"},
+	}
+	startFn := func(_ context.Context, _ []string) error { return nil }
+
+	start := time.Now()
+	err := o.StartTier(context.Background(), orchestrator.Tier{"svc-a", "svc-b"}, nil, startFn, checkers, nil)
+	elapsed := time.Since(start)
+
+	assert.NoError(t, err)
+	// If sequential, would take >=200ms. Parallel should complete in <180ms.
+	assert.Less(t, elapsed, 180*time.Millisecond, "health checks should run in parallel, took %v", elapsed)
+	assert.Contains(t, buf.String(), "svc-a")
+	assert.Contains(t, buf.String(), "svc-b")
+	assert.Contains(t, buf.String(), "healthy")
+}
+
+func TestStartTier_ParallelWithOneFailure(t *testing.T) {
+	buf := new(bytes.Buffer)
+	o := orchestrator.New(printer.New(buf))
+
+	checkers := map[string]health.Named{
+		"healthy-svc": {Checker: &mockChecker{delay: 50 * time.Millisecond}, Label: "tcp"},
+		"failing-svc": {Checker: &mockChecker{delay: 50 * time.Millisecond, err: fmt.Errorf("connection refused")}, Label: "http"},
+	}
+	startFn := func(_ context.Context, _ []string) error { return nil }
+
+	err := o.StartTier(context.Background(), orchestrator.Tier{"healthy-svc", "failing-svc"}, nil, startFn, checkers, nil)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failing-svc")
+	assert.Contains(t, err.Error(), "connection refused")
+	// The healthy service should still be printed
+	assert.Contains(t, buf.String(), "healthy-svc")
 }

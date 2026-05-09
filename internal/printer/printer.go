@@ -33,6 +33,10 @@ func (p *Printer) ServiceHealthy(name, checkType string, duration time.Duration)
 	fmt.Fprintf(p.w, "  ✓ %-12s healthy  [%s]  %s\n", name, checkType, formatDuration(duration))
 }
 
+func (p *Printer) ServiceWaiting(name string, elapsed time.Duration) {
+	fmt.Fprintf(p.w, "  ⠋ %-12s waiting... %s\n", name, formatDuration(elapsed))
+}
+
 func (p *Printer) ServiceFailed(name string, err error) {
 	fmt.Fprintf(p.w, "  ✗ %-12s failed: %v\n", name, err)
 }

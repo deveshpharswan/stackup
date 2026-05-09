@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -67,20 +68,72 @@ func (o *Orchestrator) StartTier(ctx context.Context, tier Tier, deps []string, 
 		return fmt.Errorf("failed to start tier %v: %w", []string(tier), err)
 	}
 
+	// Determine which services have health checks.
+	type checkTarget struct {
+		svc   string
+		named health.Named
+	}
+	var targets []checkTarget
 	for _, svc := range tier {
-		named, ok := checkers[svc]
-		if !ok {
-			continue
+		if named, ok := checkers[svc]; ok {
+			targets = append(targets, checkTarget{svc: svc, named: named})
 		}
-		start := time.Now()
-		if err := named.Checker.Check(ctx); err != nil {
-			o.p.ServiceFailed(svc, err)
-			o.surfaceLogs(ctx, svc, fetcher)
-			o.p.CleanupSuggestion([]string(tier))
-			o.p.Hint("stackup doctor", "stackup logs "+svc)
-			return fmt.Errorf("service %q failed health check: %w", svc, err)
+	}
+	if len(targets) == 0 {
+		return nil
+	}
+
+	// Run health checks in parallel.
+	type checkResult struct {
+		svc     string
+		label   string
+		elapsed time.Duration
+		err     error
+	}
+
+	results := make(chan checkResult, len(targets))
+	var wg sync.WaitGroup
+	wg.Add(len(targets))
+
+	for _, t := range targets {
+		go func(svc string, named health.Named) {
+			defer wg.Done()
+			start := time.Now()
+			err := named.Checker.Check(ctx)
+			results <- checkResult{
+				svc:     svc,
+				label:   named.Label,
+				elapsed: time.Since(start),
+				err:     err,
+			}
+		}(t.svc, t.named)
+	}
+
+	// Close channel once all goroutines complete.
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results, printing healthy services as they arrive.
+	var firstFailure *checkResult
+	for r := range results {
+		if r.err != nil {
+			if firstFailure == nil {
+				failed := r
+				firstFailure = &failed
+			}
+		} else {
+			o.p.ServiceHealthy(r.svc, r.label, r.elapsed)
 		}
-		o.p.ServiceHealthy(svc, named.Label, time.Since(start))
+	}
+
+	if firstFailure != nil {
+		o.p.ServiceFailed(firstFailure.svc, firstFailure.err)
+		o.surfaceLogs(ctx, firstFailure.svc, fetcher)
+		o.p.CleanupSuggestion([]string(tier))
+		o.p.Hint("stackup doctor", "stackup logs "+firstFailure.svc)
+		return fmt.Errorf("service %q failed health check: %w", firstFailure.svc, firstFailure.err)
 	}
 	return nil
 }
