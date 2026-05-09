@@ -54,6 +54,21 @@ func (c *Client) Status(ctx context.Context, containerID string) (string, error)
 	return info.State.Status, nil
 }
 
+func (c *Client) TailLogs(ctx context.Context, containerID string, lines int, w io.Writer) error {
+	opts := container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       fmt.Sprintf("%d", lines),
+	}
+	rc, err := c.cli.ContainerLogs(ctx, containerID, opts)
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	_, err = io.Copy(w, rc)
+	return err
+}
+
 func (c *Client) Logs(ctx context.Context, containerID string, follow bool, w io.Writer) error {
 	opts := container.LogsOptions{
 		ShowStdout: true,

@@ -55,7 +55,7 @@ func TestStartTier_AllHealthy(t *testing.T) {
 		started = append(started, svcs...)
 		return nil
 	}
-	err := o.StartTier(context.Background(), orchestrator.Tier{"postgres", "redis"}, nil, startFn, checkers)
+	err := o.StartTier(context.Background(), orchestrator.Tier{"postgres", "redis"}, nil, startFn, checkers, nil)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, []string{"postgres", "redis"}, started)
 }
@@ -66,7 +66,7 @@ func TestStartTier_HealthCheckFails(t *testing.T) {
 	checkers := map[string]health.Named{
 		"api": {Checker: &alwaysFailing{}, Label: "http"},
 	}
-	err := o.StartTier(context.Background(), orchestrator.Tier{"api"}, nil, func(_ context.Context, _ []string) error { return nil }, checkers)
+	err := o.StartTier(context.Background(), orchestrator.Tier{"api"}, nil, func(_ context.Context, _ []string) error { return nil }, checkers, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "api")
 }

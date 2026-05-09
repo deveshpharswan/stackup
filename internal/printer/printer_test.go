@@ -50,3 +50,43 @@ func TestPrinter_Ready(t *testing.T) {
 	p.Ready(8100 * time.Millisecond)
 	assert.Contains(t, buf.String(), "8.1s")
 }
+
+func TestPrinter_ServiceLogs(t *testing.T) {
+	buf := new(bytes.Buffer)
+	p := printer.New(buf)
+	p.ServiceLogs("api", "line1\nline2\nline3")
+	out := buf.String()
+	assert.Contains(t, out, "logs: api")
+	assert.Contains(t, out, "│ line1")
+	assert.Contains(t, out, "│ line2")
+	assert.Contains(t, out, "│ line3")
+	assert.Contains(t, out, "└────")
+}
+
+func TestPrinter_CleanupSuggestion(t *testing.T) {
+	buf := new(bytes.Buffer)
+	p := printer.New(buf)
+	p.CleanupSuggestion([]string{"postgres", "redis"})
+	out := buf.String()
+	assert.Contains(t, out, "postgres, redis")
+	assert.Contains(t, out, "stackup down")
+}
+
+func TestPrinter_Hint(t *testing.T) {
+	buf := new(bytes.Buffer)
+	p := printer.New(buf)
+	p.Hint("stackup doctor", "stackup logs api")
+	out := buf.String()
+	assert.Contains(t, out, "Try:")
+	assert.Contains(t, out, "stackup doctor")
+	assert.Contains(t, out, "stackup logs api")
+}
+
+func TestPrinter_EnvDefault(t *testing.T) {
+	buf := new(bytes.Buffer)
+	p := printer.New(buf)
+	p.EnvDefault("PORT", "3000")
+	out := buf.String()
+	assert.Contains(t, out, "PORT")
+	assert.Contains(t, out, "using default: 3000")
+}

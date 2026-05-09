@@ -1,8 +1,11 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -12,6 +15,12 @@ import (
 	"github.com/stackup-dev/stackup/internal/health"
 	"github.com/stackup-dev/stackup/internal/printer"
 )
+
+// LogFetcher abstracts container log retrieval for failure diagnostics.
+type LogFetcher interface {
+	TailLogs(ctx context.Context, containerID string, lines int, w io.Writer) error
+	ContainerIDByName(serviceName string) (string, error)
+}
 
 type Orchestrator struct {
 	p *printer.Printer
@@ -23,10 +32,17 @@ func New(p *printer.Printer) *Orchestrator {
 
 func (o *Orchestrator) PreFlight(envFile, exampleFile string, schema map[string]config.EnvVar) bool {
 	o.p.Phase("Pre-flight")
-	result := env.Validate(envFile, exampleFile, schema)
+	result, injected := env.ValidateWithDefaults(envFile, exampleFile, schema)
+
+	// Apply injected defaults to the process environment
+	for key, val := range injected {
+		os.Setenv(key, val)
+		o.p.EnvDefault(key, val)
+	}
+
 	if result.Valid() {
 		envVars, _ := godotenv.Read(envFile)
-		o.p.EnvValid(len(envVars))
+		o.p.EnvValid(len(envVars) + len(injected))
 		for key, rule := range schema {
 			if rule.Type != "" {
 				o.p.EnvKeyValid(key, rule.Type)
@@ -40,7 +56,7 @@ func (o *Orchestrator) PreFlight(envFile, exampleFile string, schema map[string]
 	return false
 }
 
-func (o *Orchestrator) StartTier(ctx context.Context, tier Tier, deps []string, startFn func(context.Context, []string) error, checkers map[string]health.Named) error {
+func (o *Orchestrator) StartTier(ctx context.Context, tier Tier, deps []string, startFn func(context.Context, []string) error, checkers map[string]health.Named, fetcher LogFetcher) error {
 	label := "Starting tier"
 	if len(deps) > 0 {
 		label += fmt.Sprintf("  (depends on: %s)", strings.Join(deps, ", "))
@@ -59,9 +75,29 @@ func (o *Orchestrator) StartTier(ctx context.Context, tier Tier, deps []string, 
 		start := time.Now()
 		if err := named.Checker.Check(ctx); err != nil {
 			o.p.ServiceFailed(svc, err)
+			o.surfaceLogs(ctx, svc, fetcher)
+			o.p.CleanupSuggestion([]string(tier))
+			o.p.Hint("stackup doctor", "stackup logs "+svc)
 			return fmt.Errorf("service %q failed health check: %w", svc, err)
 		}
 		o.p.ServiceHealthy(svc, named.Label, time.Since(start))
 	}
 	return nil
+}
+
+func (o *Orchestrator) surfaceLogs(ctx context.Context, svc string, fetcher LogFetcher) {
+	if fetcher == nil {
+		return
+	}
+	containerID, err := fetcher.ContainerIDByName(svc)
+	if err != nil {
+		return
+	}
+	var buf bytes.Buffer
+	if err := fetcher.TailLogs(ctx, containerID, 20, &buf); err != nil {
+		return
+	}
+	if buf.Len() > 0 {
+		o.p.ServiceLogs(svc, buf.String())
+	}
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stackup-dev/stackup/internal/config"
+	"github.com/stackup-dev/stackup/internal/docker"
 	"github.com/stackup-dev/stackup/internal/health"
 	"github.com/stackup-dev/stackup/internal/orchestrator"
 	"github.com/stackup-dev/stackup/internal/printer"
@@ -47,6 +48,13 @@ func newUpCmd() *cobra.Command {
 			defer dc.Close()
 			checkers := buildCheckers(cfg, dc)
 
+			// Create stackup docker client for log fetching on failure
+			logClient, err := docker.NewClient()
+			if err != nil {
+				return fmt.Errorf("connecting to Docker for log fetching: %w", err)
+			}
+			defer logClient.Close()
+
 			start := time.Now()
 			for i, tier := range tiers {
 				var tierDeps []string
@@ -60,7 +68,7 @@ func newUpCmd() *cobra.Command {
 					c.Stderr = os.Stderr
 					return c.Run()
 				}
-				if err := o.StartTier(ctx, tier, tierDeps, startFn, checkers); err != nil {
+				if err := o.StartTier(ctx, tier, tierDeps, startFn, checkers, logClient); err != nil {
 					return err
 				}
 			}

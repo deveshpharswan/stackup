@@ -28,7 +28,15 @@ func (r Result) Valid() bool {
 }
 
 func Validate(envFile, exampleFile string, schema map[string]config.EnvVar) Result {
+	result, _ := ValidateWithDefaults(envFile, exampleFile, schema)
+	return result
+}
+
+// ValidateWithDefaults validates env vars and injects schema defaults for missing keys.
+// It returns the validation result and a map of keys that were filled with defaults.
+func ValidateWithDefaults(envFile, exampleFile string, schema map[string]config.EnvVar) (Result, map[string]string) {
 	var result Result
+	injected := make(map[string]string)
 
 	envVars, err := godotenv.Read(envFile)
 	if err != nil {
@@ -36,9 +44,17 @@ func Validate(envFile, exampleFile string, schema map[string]config.EnvVar) Resu
 			Key:     "env",
 			Message: "could not read " + envFile + ": " + err.Error(),
 		})
-		return result
+		return result, injected
 	}
 	example, _ := godotenv.Read(exampleFile)
+
+	// Inject defaults for missing keys that have a default in schema
+	for key, rule := range schema {
+		if _, ok := envVars[key]; !ok && rule.Default != "" {
+			envVars[key] = rule.Default
+			injected[key] = rule.Default
+		}
+	}
 
 	for key := range example {
 		if _, ok := envVars[key]; !ok {
@@ -65,7 +81,7 @@ func Validate(envFile, exampleFile string, schema map[string]config.EnvVar) Resu
 		}
 	}
 
-	return result
+	return result, injected
 }
 
 func validateType(key, val, typ string) *ValidationError {

@@ -41,3 +41,29 @@ func TestValidate_NoExampleFile(t *testing.T) {
 	result := env.Validate("../../testdata/.env.valid", "nonexistent", nil)
 	assert.True(t, result.Valid())
 }
+
+func TestValidateWithDefaults_InjectsDefaults(t *testing.T) {
+	schema := map[string]config.EnvVar{
+		"DATABASE_URL": {Type: "url", Required: true},
+		"PORT":         {Type: "int", Required: true},
+		"LOG_LEVEL":    {Type: "", Required: false, Default: "info"},
+		"TIMEOUT":      {Type: "int", Required: false, Default: "30"},
+	}
+	// .env.valid has DATABASE_URL, PORT, API_KEY but not LOG_LEVEL or TIMEOUT
+	result, injected := env.ValidateWithDefaults("../../testdata/.env.valid", "../../testdata/.env.example", schema)
+	assert.True(t, result.Valid())
+	assert.Equal(t, "info", injected["LOG_LEVEL"])
+	assert.Equal(t, "30", injected["TIMEOUT"])
+	assert.NotContains(t, injected, "DATABASE_URL") // already present, not injected
+	assert.NotContains(t, injected, "PORT")         // already present, not injected
+}
+
+func TestValidateWithDefaults_NoDefaultWhenPresent(t *testing.T) {
+	schema := map[string]config.EnvVar{
+		"PORT": {Type: "int", Required: true, Default: "8080"},
+	}
+	// .env.valid already has PORT=3000, so default should NOT be injected
+	result, injected := env.ValidateWithDefaults("../../testdata/.env.valid", "../../testdata/.env.example", schema)
+	assert.True(t, result.Valid())
+	assert.Empty(t, injected)
+}
