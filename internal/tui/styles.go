@@ -1,6 +1,17 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"os"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
+)
+
+func init() {
+	if os.Getenv("NO_COLOR") != "" {
+		lipgloss.DefaultRenderer().SetColorProfile(termenv.Ascii)
+	}
+}
 
 var (
 	colorGreen  = lipgloss.Color("#7ee787")

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Interactive terminal UI (`stackup ui`) — k9s-style dashboard with bubbletea
+- Services view: real-time table with Docker polling, row selection, color-coded health
+- Logs view: streaming container logs with viewport scrolling, search, timestamps toggle
+- Doctor view: diagnostic findings table with re-scan and detail expansion
+- Graph view: ASCII dependency DAG showing tier structure and health status
+- Describe view: service detail panel showing config, health checks, dependencies
+- Command mode (`:services`, `:logs <name>`, `:doctor`, `:graph`, `:describe <name>`, `:quit`)
+- Filter mode (`/regex`) for table views
+- Service actions: restart, stop, shell (with confirmation modal for destructive ops)
+- Help overlay (`?`) with context-sensitive keybinding reference
+- Toast notifications for action feedback (3s auto-dismiss)
 - Live dashboard mode (`stackup status --watch`) — refreshes every 2s with colored table
 - `ClearScreen()` printer method for ANSI terminal clearing
 - Color accessor methods on Printer (`Green`, `Red`, `Yellow`, `Dim`, `Bold`)
