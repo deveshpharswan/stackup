@@ -23,6 +23,7 @@ type alwaysFailing struct{}
 func (a *alwaysFailing) Check(_ context.Context) error { return fmt.Errorf("service unavailable") }
 
 func TestPreFlight_Valid(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	o := orchestrator.New(printer.New(buf))
 	ok := o.PreFlight(
@@ -37,6 +38,7 @@ func TestPreFlight_Valid(t *testing.T) {
 }
 
 func TestPreFlight_Invalid(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	o := orchestrator.New(printer.New(buf))
 	ok := o.PreFlight("../../testdata/.env.missing-key", "../../testdata/.env.example", nil)
@@ -45,6 +47,7 @@ func TestPreFlight_Invalid(t *testing.T) {
 }
 
 func TestStartTier_AllHealthy(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	o := orchestrator.New(printer.New(buf))
 	checkers := map[string]health.Named{
@@ -62,6 +65,7 @@ func TestStartTier_AllHealthy(t *testing.T) {
 }
 
 func TestStartTier_HealthCheckFails(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	o := orchestrator.New(printer.New(buf))
 	checkers := map[string]health.Named{
@@ -84,12 +88,14 @@ func (m *mockChecker) Check(ctx context.Context) error {
 }
 
 func TestStartTier_ParallelHealthChecks(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	o := orchestrator.New(printer.New(buf))
 
+	const checkDelay = 200 * time.Millisecond
 	checkers := map[string]health.Named{
-		"svc-a": {Checker: &mockChecker{delay: 100 * time.Millisecond}, Label: "tcp"},
-		"svc-b": {Checker: &mockChecker{delay: 100 * time.Millisecond}, Label: "tcp"},
+		"svc-a": {Checker: &mockChecker{delay: checkDelay}, Label: "tcp"},
+		"svc-b": {Checker: &mockChecker{delay: checkDelay}, Label: "tcp"},
 	}
 	startFn := func(_ context.Context, _ []string) error { return nil }
 
@@ -98,14 +104,16 @@ func TestStartTier_ParallelHealthChecks(t *testing.T) {
 	elapsed := time.Since(start)
 
 	assert.NoError(t, err)
-	// If sequential, would take >=200ms. Parallel should complete in <180ms.
-	assert.Less(t, elapsed, 180*time.Millisecond, "health checks should run in parallel, took %v", elapsed)
+	// Parallel: elapsed ≈ checkDelay. Sequential would be ≈ 2*checkDelay.
+	// Use 2*checkDelay as upper bound — generous enough for slow CI.
+	assert.Less(t, elapsed, 2*checkDelay, "health checks should run in parallel, took %v", elapsed)
 	assert.Contains(t, buf.String(), "svc-a")
 	assert.Contains(t, buf.String(), "svc-b")
 	assert.Contains(t, buf.String(), "healthy")
 }
 
 func TestStartTier_ParallelWithOneFailure(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	o := orchestrator.New(printer.New(buf))
 

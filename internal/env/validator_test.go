@@ -14,12 +14,14 @@ var testSchema = map[string]config.EnvVar{
 }
 
 func TestValidate_AllPresent_ValidTypes(t *testing.T) {
+	t.Parallel()
 	result := env.Validate("../../testdata/.env.valid", "../../testdata/.env.example", testSchema)
 	assert.True(t, result.Valid())
 	assert.Empty(t, result.Errors)
 }
 
 func TestValidate_MissingKey(t *testing.T) {
+	t.Parallel()
 	result := env.Validate("../../testdata/.env.missing-key", "../../testdata/.env.example", nil)
 	assert.False(t, result.Valid())
 	assert.Len(t, result.Errors, 1)
@@ -27,6 +29,7 @@ func TestValidate_MissingKey(t *testing.T) {
 }
 
 func TestValidate_BadTypes(t *testing.T) {
+	t.Parallel()
 	result := env.Validate("../../testdata/.env.bad-type", "../../testdata/.env.example", testSchema)
 	assert.False(t, result.Valid())
 	keys := make([]string, len(result.Errors))
@@ -38,11 +41,13 @@ func TestValidate_BadTypes(t *testing.T) {
 }
 
 func TestValidate_NoExampleFile(t *testing.T) {
+	t.Parallel()
 	result := env.Validate("../../testdata/.env.valid", "nonexistent", nil)
 	assert.True(t, result.Valid())
 }
 
 func TestValidateWithDefaults_InjectsDefaults(t *testing.T) {
+	t.Parallel()
 	schema := map[string]config.EnvVar{
 		"DATABASE_URL": {Type: "url", Required: true},
 		"PORT":         {Type: "int", Required: true},
@@ -59,6 +64,7 @@ func TestValidateWithDefaults_InjectsDefaults(t *testing.T) {
 }
 
 func TestValidateWithDefaults_NoDefaultWhenPresent(t *testing.T) {
+	t.Parallel()
 	schema := map[string]config.EnvVar{
 		"PORT": {Type: "int", Required: true, Default: "8080"},
 	}

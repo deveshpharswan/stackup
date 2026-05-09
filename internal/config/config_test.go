@@ -9,6 +9,7 @@ import (
 )
 
 func TestLoad_ValidFile(t *testing.T) {
+	t.Parallel()
 	cfg, err := config.Load("../../testdata/valid-stackup.yml")
 	require.NoError(t, err)
 	assert.Equal(t, "1", cfg.Version)
@@ -41,11 +42,13 @@ func TestLoad_ValidFile(t *testing.T) {
 }
 
 func TestLoad_MissingFile(t *testing.T) {
+	t.Parallel()
 	_, err := config.Load("nonexistent.yml")
 	assert.Error(t, err)
 }
 
 func TestLoadOrEmpty_MissingFile(t *testing.T) {
+	t.Parallel()
 	cfg := config.LoadOrEmpty("nonexistent.yml")
 	assert.NotNil(t, cfg)
 	assert.Empty(t, cfg.Services)

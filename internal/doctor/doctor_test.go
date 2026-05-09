@@ -13,6 +13,7 @@ import (
 )
 
 func TestCheckEnvDrift_DetectsMissing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	envFile := filepath.Join(dir, ".env")
@@ -37,6 +38,7 @@ func TestCheckEnvDrift_DetectsMissing(t *testing.T) {
 }
 
 func TestCheckEnvDrift_NoDrift(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	envFile := filepath.Join(dir, ".env")
@@ -56,6 +58,7 @@ func TestCheckEnvDrift_NoDrift(t *testing.T) {
 }
 
 func TestPrintFindings_FormatsCorrectly(t *testing.T) {
+	t.Parallel()
 	findings := []Finding{
 		{Severity: SeverityError, Title: "Port 5432 in use", Detail: "postgres", Fix: "lsof -i :5432", Service: "postgres"},
 		{Severity: SeverityWarning, Title: "Env drift detected", Detail: "missing KEY_A"},
@@ -82,6 +85,7 @@ func TestPrintFindings_FormatsCorrectly(t *testing.T) {
 }
 
 func TestCheckLocalhostMisuse_DetectsPattern(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	envFile := filepath.Join(dir, ".env")
@@ -120,6 +124,7 @@ func TestCheckLocalhostMisuse_DetectsPattern(t *testing.T) {
 }
 
 func TestCheckLocalhostMisuse_NoMatch(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 
 	envFile := filepath.Join(dir, ".env")
@@ -145,6 +150,7 @@ func TestCheckLocalhostMisuse_NoMatch(t *testing.T) {
 }
 
 func TestGuessServicePort(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		want string

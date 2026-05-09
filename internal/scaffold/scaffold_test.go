@@ -12,6 +12,7 @@ import (
 )
 
 func TestGenerate(t *testing.T) {
+	t.Parallel()
 	out, err := scaffold.Generate("../../testdata/docker-compose.yml", "../../testdata/.env.example")
 	require.NoError(t, err)
 	assert.Contains(t, out, "postgres:")
@@ -23,6 +24,7 @@ func TestGenerate(t *testing.T) {
 }
 
 func TestGenerate_SmartImageDetection(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	composePath := filepath.Join(dir, "docker-compose.yml")
 	os.WriteFile(composePath, []byte(`services:
@@ -44,6 +46,7 @@ func TestGenerate_SmartImageDetection(t *testing.T) {
 }
 
 func TestDetectHealthDefault_KnownImages(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		image string
 		port  int
@@ -61,6 +64,7 @@ func TestDetectHealthDefault_KnownImages(t *testing.T) {
 }
 
 func TestDetectHealthDefault_UnknownImage(t *testing.T) {
+	t.Parallel()
 	def := scaffold.DetectHealthDefault("mycompany/custom-app:latest")
 	assert.Nil(t, def)
 }

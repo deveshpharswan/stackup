@@ -44,6 +44,7 @@ $ stackup up
   ✓ .env validated (4 keys, 0 missing)
   ✓ DATABASE_URL — valid url
   ✓ PORT — valid int
+  ℹ TIMEOUT — using default: 30
 
 → Starting tier
   ✓ postgres     healthy  [tcp:5432]  2.3s
@@ -70,6 +71,62 @@ If something fails, Stackup shows you why immediately:
   Try:
     • stackup doctor
     • stackup logs api
+```
+
+## Features
+
+### Health-Gated Startup
+
+Services start in dependency order using topological sort (Kahn's algorithm). Each tier waits for health checks to pass before the next tier starts. Health checks within a tier run **in parallel** for faster startup.
+
+### Environment Validation
+
+Validates `.env` against a schema before starting anything. Catches missing keys, type mismatches (url, int, bool), and drift from `.env.example`. Schema defaults are injected automatically.
+
+### Failure Diagnostics
+
+When a health check fails, Stackup automatically surfaces the last 20 lines of container logs and suggests next steps (`stackup doctor`, `stackup logs <svc>`).
+
+### Automated Doctor
+
+`stackup doctor` runs diagnostic checks: port conflicts, environment drift, localhost misuse in Docker, crash loops, and more.
+
+### Team Onboarding
+
+When `.env` doesn't exist, `stackup up` walks new developers through creating it interactively — using schema defaults and `.env.example` as a guide.
+
+### Lifecycle Hooks
+
+Run commands after a service becomes healthy (e.g., database migrations):
+
+```yaml
+services:
+  postgres:
+    hooks:
+      after_start:
+        - name: "Run migrations"
+          service: api
+          run: "npm run db:migrate"
+```
+
+### CI Health Check
+
+`stackup check` exits 0 if all services are healthy, exit 2 if not. Supports `--format json`, `--service <name>`, and `--quiet` flags.
+
+### Smart Init
+
+`stackup init` detects known Docker images (postgres, redis, mysql, mongo, elasticsearch, etc.) and auto-generates correct health check configuration.
+
+### Log-Based Health Checks
+
+For services without HTTP or TCP readiness signals, watch container logs for a pattern:
+
+```yaml
+postgres:
+  health:
+    type: log
+    pattern: "database system is ready to accept connections"
+    timeout: 30s
 ```
 
 ## Commands
@@ -103,6 +160,9 @@ env:
     PORT:
       type: int
       default: "3000"
+    LOG_LEVEL:
+      type: string
+      default: "info"
 
 services:
   postgres:
@@ -140,15 +200,6 @@ commands:
 | `tcp` | Databases, caches | `host`, `port` |
 | `docker` | Images with built-in HEALTHCHECK | — |
 | `log` | Services that log readiness | `pattern` |
-
-```yaml
-# Log-based health check example (for older databases)
-postgres:
-  health:
-    type: log
-    pattern: "database system is ready to accept connections"
-    timeout: 30s
-```
 
 ## Diagnostics
 

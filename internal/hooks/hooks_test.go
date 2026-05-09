@@ -10,6 +10,7 @@ import (
 )
 
 func TestRunAfterStart_EmptyActions(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	e := NewExecutor(&buf)
 	err := e.RunAfterStart(context.Background(), "postgres", nil)
@@ -18,6 +19,7 @@ func TestRunAfterStart_EmptyActions(t *testing.T) {
 }
 
 func TestRunAfterStart_EmptyServiceDefaultsToParent(t *testing.T) {
+	t.Parallel()
 	// We can't actually run docker, but we can verify the executor
 	// constructs with the right writer and handles the empty-actions case.
 	var buf bytes.Buffer
@@ -36,6 +38,7 @@ func TestRunAfterStart_EmptyServiceDefaultsToParent(t *testing.T) {
 }
 
 func TestRunAfterStart_EmptyNameUsesRun(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	e := NewExecutor(&buf)
 
@@ -49,6 +52,7 @@ func TestRunAfterStart_EmptyNameUsesRun(t *testing.T) {
 }
 
 func TestNewExecutor(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	e := NewExecutor(&buf)
 	assert.NotNil(t, e)

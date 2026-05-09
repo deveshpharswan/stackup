@@ -11,6 +11,7 @@ import (
 )
 
 func TestPrinter_Phase(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	p := printer.New(buf)
 	p.Phase("Pre-flight")
@@ -18,6 +19,7 @@ func TestPrinter_Phase(t *testing.T) {
 }
 
 func TestPrinter_ServiceHealthy(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	p := printer.New(buf)
 	p.ServiceHealthy("postgres", "tcp:5432", 2300*time.Millisecond)
@@ -28,6 +30,7 @@ func TestPrinter_ServiceHealthy(t *testing.T) {
 }
 
 func TestPrinter_ServiceFailed(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	p := printer.New(buf)
 	p.ServiceFailed("api", fmt.Errorf("connection refused"))
@@ -36,6 +39,7 @@ func TestPrinter_ServiceFailed(t *testing.T) {
 }
 
 func TestPrinter_ValidationError(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	p := printer.New(buf)
 	p.ValidationError("DATABASE_URL", `expected valid URL, got "notaurl"`)
@@ -45,6 +49,7 @@ func TestPrinter_ValidationError(t *testing.T) {
 }
 
 func TestPrinter_Ready(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	p := printer.New(buf)
 	p.Ready(8100 * time.Millisecond)
@@ -52,6 +57,7 @@ func TestPrinter_Ready(t *testing.T) {
 }
 
 func TestPrinter_ServiceLogs(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	p := printer.New(buf)
 	p.ServiceLogs("api", "line1\nline2\nline3")
@@ -64,6 +70,7 @@ func TestPrinter_ServiceLogs(t *testing.T) {
 }
 
 func TestPrinter_CleanupSuggestion(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	p := printer.New(buf)
 	p.CleanupSuggestion([]string{"postgres", "redis"})
@@ -73,6 +80,7 @@ func TestPrinter_CleanupSuggestion(t *testing.T) {
 }
 
 func TestPrinter_Hint(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	p := printer.New(buf)
 	p.Hint("stackup doctor", "stackup logs api")
@@ -83,6 +91,7 @@ func TestPrinter_Hint(t *testing.T) {
 }
 
 func TestPrinter_EnvDefault(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	p := printer.New(buf)
 	p.EnvDefault("PORT", "3000")

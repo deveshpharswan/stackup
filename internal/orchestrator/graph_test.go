@@ -9,6 +9,7 @@ import (
 )
 
 func TestBuildTiers_NoDeps(t *testing.T) {
+	t.Parallel()
 	deps := map[string][]string{
 		"web":      {},
 		"worker":   {},
@@ -21,6 +22,7 @@ func TestBuildTiers_NoDeps(t *testing.T) {
 }
 
 func TestBuildTiers_LinearChain(t *testing.T) {
+	t.Parallel()
 	deps := map[string][]string{
 		"postgres": {},
 		"api":      {"postgres"},
@@ -35,6 +37,7 @@ func TestBuildTiers_LinearChain(t *testing.T) {
 }
 
 func TestBuildTiers_SharedDep(t *testing.T) {
+	t.Parallel()
 	deps := map[string][]string{
 		"postgres": {},
 		"redis":    {},
@@ -48,6 +51,7 @@ func TestBuildTiers_SharedDep(t *testing.T) {
 }
 
 func TestBuildTiers_CycleDetected(t *testing.T) {
+	t.Parallel()
 	deps := map[string][]string{
 		"a": {"b"},
 		"b": {"a"},

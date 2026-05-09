@@ -11,6 +11,7 @@ import (
 )
 
 func TestNeedsOnboarding_MissingEnv(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, ".env")
 	if !NeedsOnboarding(envPath) {
@@ -19,6 +20,7 @@ func TestNeedsOnboarding_MissingEnv(t *testing.T) {
 }
 
 func TestNeedsOnboarding_ExistingEnv(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, ".env")
 	if err := os.WriteFile(envPath, []byte("FOO=bar\n"), 0644); err != nil {
@@ -30,6 +32,7 @@ func TestNeedsOnboarding_ExistingEnv(t *testing.T) {
 }
 
 func TestOnboarder_Run_CreatesEnvFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, ".env")
 	examplePath := filepath.Join(dir, ".env.example")
@@ -68,6 +71,7 @@ func TestOnboarder_Run_CreatesEnvFile(t *testing.T) {
 }
 
 func TestOnboarder_Run_UsesDefaults(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, ".env")
 	examplePath := filepath.Join(dir, ".env.example")
@@ -100,6 +104,7 @@ func TestOnboarder_Run_UsesDefaults(t *testing.T) {
 }
 
 func TestOnboarder_Run_Cancelled(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, ".env")
 	examplePath := filepath.Join(dir, ".env.example")

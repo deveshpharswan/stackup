@@ -11,6 +11,7 @@ import (
 )
 
 func TestTCPChecker_Open(t *testing.T) {
+	t.Parallel()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	assert.NoError(t, err)
 	defer ln.Close()
@@ -20,6 +21,7 @@ func TestTCPChecker_Open(t *testing.T) {
 }
 
 func TestTCPChecker_Closed(t *testing.T) {
+	t.Parallel()
 	checker := health.NewTCPChecker("127.0.0.1", "19998", 300*time.Millisecond, 50*time.Millisecond)
 	assert.Error(t, checker.Check(context.Background()))
 }

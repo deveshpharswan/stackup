@@ -12,6 +12,7 @@ import (
 )
 
 func TestHTTPChecker_Healthy(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -21,6 +22,7 @@ func TestHTTPChecker_Healthy(t *testing.T) {
 }
 
 func TestHTTPChecker_Unhealthy(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
@@ -30,6 +32,7 @@ func TestHTTPChecker_Unhealthy(t *testing.T) {
 }
 
 func TestHTTPChecker_ServerDown(t *testing.T) {
+	t.Parallel()
 	checker := health.NewHTTPChecker("http://127.0.0.1:19999", 300*time.Millisecond, 50*time.Millisecond)
 	assert.Error(t, checker.Check(context.Background()))
 }
