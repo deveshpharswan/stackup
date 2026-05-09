@@ -126,6 +126,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m = m.pushView(ViewGraph)
 				return m, m.graph.Init()
 			}
+		case "enter":
+			if m.activeView == ViewServices {
+				if svc := m.services.Selected(); svc != "" {
+					m = m.pushView(ViewDescribe)
+					newDesc, cmd := m.describe.Start(svc, m.services.Services(), m.width, m.height-7)
+					m.describe = newDesc
+					return m, cmd
+				}
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -181,6 +190,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.View == ViewGraph {
 			m = m.pushView(ViewGraph)
 			return m, m.graph.Init()
+		}
+		if msg.View == ViewDescribe && msg.Arg != "" {
+			m = m.pushView(ViewDescribe)
+			newDesc, cmd := m.describe.Start(msg.Arg, m.services.Services(), m.width, m.height-7)
+			m.describe = newDesc
+			return m, cmd
 		}
 		m = m.pushView(msg.View)
 	}

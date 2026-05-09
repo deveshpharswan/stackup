@@ -148,6 +148,10 @@ func (m ServicesModel) Count() int {
 	return len(m.filtered)
 }
 
+func (m ServicesModel) Services() []ServiceInfo {
+	return m.services
+}
+
 func (m ServicesModel) Selected() string {
 	if m.cursor < len(m.filtered) {
 		return m.filtered[m.cursor].Name
