@@ -138,6 +138,30 @@ func (p *Printer) EnvDefault(key, val string) {
 	fmt.Fprintf(p.w, "  %s %s — using default: %s\n", p.yellow.Sprint("⚙"), key, p.dim.Sprint(val))
 }
 
+// ClearScreen sends ANSI escape sequences to move cursor home and clear the screen.
+// No-op when output is not a TTY.
+func (p *Printer) ClearScreen() {
+	if !p.isTTY {
+		return
+	}
+	fmt.Fprint(p.w, "\033[H\033[2J")
+}
+
+// Green returns text colored green (or plain if no TTY).
+func (p *Printer) Green(s string) string { return p.green.Sprint(s) }
+
+// Red returns text colored red (or plain if no TTY).
+func (p *Printer) Red(s string) string { return p.red.Sprint(s) }
+
+// Yellow returns text colored yellow (or plain if no TTY).
+func (p *Printer) Yellow(s string) string { return p.yellow.Sprint(s) }
+
+// Dim returns text in dim gray (or plain if no TTY).
+func (p *Printer) Dim(s string) string { return p.dim.Sprint(s) }
+
+// Bold returns text in bold (or plain if no TTY).
+func (p *Printer) Bold(s string) string { return p.bold.Sprint(s) }
+
 // SummaryTable prints a bordered table of service health check results.
 func (p *Printer) SummaryTable(results []ServiceResult, total time.Duration) {
 	if len(results) == 0 {

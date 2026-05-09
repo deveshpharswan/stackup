@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Live dashboard mode (`stackup status --watch`) — refreshes every 2s with colored table
+- `ClearScreen()` printer method for ANSI terminal clearing
+- Color accessor methods on Printer (`Green`, `Red`, `Yellow`, `Dim`, `Bold`)
+- Ports column in status output (both text and JSON modes)
+- Health status parsing from Docker Compose status strings
+
 ## [0.3.0] - 2026-05-09
 
 ### Added
