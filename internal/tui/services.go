@@ -1,12 +1,223 @@
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"bufio"
+	"fmt"
+	"os/exec"
+	"regexp"
+	"strings"
+	"time"
 
-type ServicesModel struct{ count int }
+	tea "github.com/charmbracelet/bubbletea"
+)
 
-func NewServicesModel() ServicesModel                                 { return ServicesModel{} }
-func (m ServicesModel) Init() tea.Cmd                                 { return nil }
-func (m ServicesModel) Update(msg tea.Msg) (ServicesModel, tea.Cmd)   { return m, nil }
-func (m ServicesModel) View(width, height int) string                  { return "  No services loaded" }
-func (m ServicesModel) Count() int                                    { return m.count }
-func (m ServicesModel) Selected() string                              { return "" }
+type ServicesModel struct {
+	services []ServiceInfo
+	filtered []ServiceInfo
+	cursor   int
+	filter   string
+	err      error
+}
+
+func NewServicesModel() ServicesModel {
+	return ServicesModel{}
+}
+
+func (m ServicesModel) Init() tea.Cmd {
+	return tea.Batch(pollServices(), tickEvery(2*time.Second))
+}
+
+func (m ServicesModel) Update(msg tea.Msg) (ServicesModel, tea.Cmd) {
+	switch msg := msg.(type) {
+	case ServiceUpdateMsg:
+		if msg.Err != nil {
+			m.err = msg.Err
+			return m, nil
+		}
+		m.services = msg.Services
+		m.err = nil
+		m.applyFilter()
+	case TickMsg:
+		return m, tea.Batch(pollServices(), tickEvery(2*time.Second))
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "j", "down":
+			if m.cursor < len(m.filtered)-1 {
+				m.cursor++
+			}
+		case "k", "up":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m ServicesModel) View(width, height int) string {
+	if m.err != nil {
+		return styleWarning.Render(fmt.Sprintf("  Docker error: %v\n\n", m.err)) +
+			styleDim.Render("  Is Docker running?")
+	}
+	if len(m.filtered) == 0 {
+		return styleDim.Render("  No services found")
+	}
+
+	var b strings.Builder
+	header := fmt.Sprintf("  %-16s %-12s %-12s %-20s %-6s %s",
+		"NAME", "STATE", "HEALTH", "PORT", "TIER", "UPTIME")
+	b.WriteString(styleInfo.Bold(true).Render(header) + "\n")
+	b.WriteString(styleDim.Render("  "+strings.Repeat("─", width-4)) + "\n")
+
+	for i, svc := range m.filtered {
+		if i >= height-3 {
+			break
+		}
+		row := m.renderRow(svc, i == m.cursor, width)
+		b.WriteString(row + "\n")
+	}
+
+	running, healthy, failed := 0, 0, 0
+	for _, s := range m.services {
+		switch {
+		case s.State == "running" && s.Health == "healthy":
+			running++
+			healthy++
+		case s.State == "running":
+			running++
+		default:
+			failed++
+		}
+	}
+	b.WriteString("\n" + styleDim.Render("  "+strings.Repeat("─", width-4)) + "\n")
+	summary := fmt.Sprintf("  %s   %s   %s",
+		styleHealthy.Render(fmt.Sprintf("✓ %d healthy", healthy)),
+		styleWarning.Render(fmt.Sprintf("⠋ %d starting", running-healthy)),
+		styleFailed.Render(fmt.Sprintf("✗ %d failed", failed)))
+	b.WriteString(summary)
+
+	return b.String()
+}
+
+func (m ServicesModel) renderRow(svc ServiceInfo, selected bool, width int) string {
+	tier := fmt.Sprintf("%d", svc.Tier)
+	ports := svc.Ports
+	if ports == "" {
+		ports = "—"
+	}
+	uptime := formatUptime(svc.Uptime)
+
+	row := fmt.Sprintf("  %-16s %-12s %-12s %-20s %-6s %s",
+		svc.Name, svc.State, svc.Health, ports, tier, uptime)
+
+	if selected {
+		return styleSelected.Width(width).Render(row)
+	}
+
+	switch {
+	case svc.State == "running" && svc.Health == "healthy":
+		return styleHealthy.Render(row)
+	case svc.State == "running" && (svc.Health == "starting" || svc.Health == ""):
+		return styleWarning.Render(row)
+	case svc.State == "exited" || svc.State == "restarting":
+		return styleFailed.Render(row)
+	default:
+		return styleDim.Render(row)
+	}
+}
+
+func (m ServicesModel) Count() int {
+	return len(m.filtered)
+}
+
+func (m ServicesModel) Selected() string {
+	if m.cursor < len(m.filtered) {
+		return m.filtered[m.cursor].Name
+	}
+	return ""
+}
+
+func (m ServicesModel) SetFilter(f string) ServicesModel {
+	m.filter = f
+	m.applyFilter()
+	m.cursor = 0
+	return m
+}
+
+func (m *ServicesModel) applyFilter() {
+	if m.filter == "" {
+		m.filtered = m.services
+		return
+	}
+	re, err := regexp.Compile("(?i)" + m.filter)
+	if err != nil {
+		m.filtered = m.services
+		return
+	}
+	var filtered []ServiceInfo
+	for _, s := range m.services {
+		if re.MatchString(s.Name) {
+			filtered = append(filtered, s)
+		}
+	}
+	m.filtered = filtered
+	if m.cursor >= len(m.filtered) {
+		m.cursor = max(0, len(m.filtered)-1)
+	}
+}
+
+func pollServices() tea.Cmd {
+	return func() tea.Msg {
+		c := exec.Command("docker", "compose", "ps", "--format",
+			"{{.Service}}\t{{.State}}\t{{.Status}}\t{{.Ports}}")
+		out, err := c.Output()
+		if err != nil {
+			return ServiceUpdateMsg{Err: fmt.Errorf("docker compose ps: %w", err)}
+		}
+
+		var services []ServiceInfo
+		scanner := bufio.NewScanner(strings.NewReader(string(out)))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line == "" {
+				continue
+			}
+			parts := strings.SplitN(line, "\t", 4)
+			if len(parts) < 2 {
+				continue
+			}
+			svc := ServiceInfo{
+				Name:  strings.TrimSpace(parts[0]),
+				State: strings.TrimSpace(parts[1]),
+			}
+			if len(parts) >= 3 {
+				svc.Health = parseHealthStatus(parts[2])
+			}
+			if len(parts) >= 4 {
+				svc.Ports = strings.TrimSpace(parts[3])
+			}
+			services = append(services, svc)
+		}
+		return ServiceUpdateMsg{Services: services}
+	}
+}
+
+func parseHealthStatus(status string) string {
+	lower := strings.ToLower(status)
+	switch {
+	case strings.Contains(lower, "healthy"):
+		return "healthy"
+	case strings.Contains(lower, "unhealthy"):
+		return "unhealthy"
+	case strings.Contains(lower, "starting"):
+		return "starting"
+	default:
+		return "(none)"
+	}
+}
+
+func tickEvery(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(t time.Time) tea.Msg {
+		return TickMsg(t)
+	})
+}
