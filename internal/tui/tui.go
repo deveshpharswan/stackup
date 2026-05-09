@@ -107,6 +107,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m = m.popView()
 			return m, nil
+		case "l":
+			if m.activeView == ViewServices {
+				if svc := m.services.Selected(); svc != "" {
+					m = m.pushView(ViewLogs)
+					newLogs, cmd := m.logs.Start(svc, m.width, m.height-7)
+					m.logs = newLogs
+					return m, cmd
+				}
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -148,6 +157,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.IsQuit {
 			m.quitting = true
 			return m, tea.Quit
+		}
+		if msg.View == ViewLogs && msg.Arg != "" {
+			m = m.pushView(ViewLogs)
+			newLogs, cmd := m.logs.Start(msg.Arg, m.width, m.height-7)
+			m.logs = newLogs
+			return m, cmd
 		}
 		m = m.pushView(msg.View)
 	}
