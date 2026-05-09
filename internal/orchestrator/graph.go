@@ -11,6 +11,7 @@ type Tier []string
 
 // BuildTiers returns services grouped into startup tiers using Kahn's algorithm.
 // Services in tier N have all their dependencies satisfied by tiers 0..N-1.
+// Returns an error if a dependency cycle is detected.
 // Complexity: O(V+E) where V = services and E = dependency edges.
 func BuildTiers(deps map[string][]string) ([]Tier, error) {
 	// Build adjacency list (reverse edges) and compute in-degrees.

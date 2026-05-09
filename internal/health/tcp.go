@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// TCPChecker polls a TCP endpoint until a connection can be established.
 type TCPChecker struct {
 	host     string
 	port     string
@@ -14,10 +15,12 @@ type TCPChecker struct {
 	interval time.Duration
 }
 
+// NewTCPChecker creates a health checker that dials the given host:port.
 func NewTCPChecker(host, port string, timeout, interval time.Duration) *TCPChecker {
 	return &TCPChecker{host: host, port: port, timeout: timeout, interval: interval}
 }
 
+// Check polls the TCP endpoint until connectable or timeout.
 func (c *TCPChecker) Check(ctx context.Context) error {
 	addr := net.JoinHostPort(c.host, c.port)
 

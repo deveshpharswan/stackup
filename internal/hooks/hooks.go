@@ -1,3 +1,4 @@
+// Package hooks executes lifecycle hook commands inside Docker containers.
 package hooks
 
 import (

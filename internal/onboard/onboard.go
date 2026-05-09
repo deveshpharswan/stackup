@@ -1,3 +1,4 @@
+// Package onboard provides interactive .env creation for new team members.
 package onboard
 
 import (

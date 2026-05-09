@@ -1,3 +1,4 @@
+// Package orchestrator coordinates health-gated service startup in tiered order.
 package orchestrator
 
 import (
@@ -22,14 +23,18 @@ type LogFetcher interface {
 	ContainerIDByName(serviceName string) (string, error)
 }
 
+// Orchestrator manages the startup sequence and health checking of services.
 type Orchestrator struct {
 	p *printer.Printer
 }
 
+// New creates an Orchestrator that reports progress via the given printer.
 func New(p *printer.Printer) *Orchestrator {
 	return &Orchestrator{p: p}
 }
 
+// PreFlight validates environment variables and injects schema defaults.
+// Returns true if validation passes, along with a map of injected default values.
 func (o *Orchestrator) PreFlight(envFile, exampleFile string, schema map[string]config.EnvVar) (bool, map[string]string) {
 	o.p.Phase("Pre-flight")
 	result, injected := env.ValidateWithDefaults(envFile, exampleFile, schema)
@@ -54,7 +59,28 @@ func (o *Orchestrator) PreFlight(envFile, exampleFile string, schema map[string]
 	return false, nil
 }
 
+// StartTier starts all services in a tier and waits for their health checks to pass.
+// Health checks run in parallel. On failure, it surfaces container logs and suggests fixes.
 func (o *Orchestrator) StartTier(ctx context.Context, tier Tier, deps []string, startFn func(context.Context, []string) error, checkers map[string]health.Named, fetcher LogFetcher) error {
+	failed, firstErr, err := o.startTierInternal(ctx, tier, deps, startFn, checkers, fetcher)
+	if err != nil {
+		return err
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("service %q failed health check: %w", failed[0], firstErr)
+	}
+	return nil
+}
+
+// StartTierPartial starts all services in a tier and returns the names of failed services
+// instead of stopping on first failure. Returns a non-nil error only for startup failures
+// (not health check failures).
+func (o *Orchestrator) StartTierPartial(ctx context.Context, tier Tier, deps []string, startFn func(context.Context, []string) error, checkers map[string]health.Named, fetcher LogFetcher) ([]string, error) {
+	failed, _, err := o.startTierInternal(ctx, tier, deps, startFn, checkers, fetcher)
+	return failed, err
+}
+
+func (o *Orchestrator) startTierInternal(ctx context.Context, tier Tier, deps []string, startFn func(context.Context, []string) error, checkers map[string]health.Named, fetcher LogFetcher) ([]string, error, error) {
 	label := "Starting tier"
 	if len(deps) > 0 {
 		label += fmt.Sprintf("  (depends on: %s)", strings.Join(deps, ", "))
@@ -62,7 +88,7 @@ func (o *Orchestrator) StartTier(ctx context.Context, tier Tier, deps []string, 
 	o.p.Phase(label)
 
 	if err := startFn(ctx, tier); err != nil {
-		return fmt.Errorf("failed to start tier %v: %w", []string(tier), err)
+		return nil, nil, fmt.Errorf("failed to start tier %v: %w", []string(tier), err)
 	}
 
 	// Determine which services have health checks.
@@ -77,7 +103,7 @@ func (o *Orchestrator) StartTier(ctx context.Context, tier Tier, deps []string, 
 		}
 	}
 	if len(targets) == 0 {
-		return nil
+		return nil, nil, nil
 	}
 
 	// Run health checks in parallel.
@@ -113,26 +139,31 @@ func (o *Orchestrator) StartTier(ctx context.Context, tier Tier, deps []string, 
 	}()
 
 	// Collect results, printing healthy services as they arrive.
-	var firstFailure *checkResult
+	var failures []checkResult
 	for r := range results {
 		if r.err != nil {
-			if firstFailure == nil {
-				failed := r
-				firstFailure = &failed
-			}
+			failures = append(failures, r)
 		} else {
 			o.p.ServiceHealthy(r.svc, r.label, r.elapsed)
 		}
 	}
 
-	if firstFailure != nil {
-		o.p.ServiceFailed(firstFailure.svc, firstFailure.err)
-		o.surfaceLogs(ctx, firstFailure.svc, fetcher)
-		o.p.CleanupSuggestion([]string(tier))
-		o.p.Hint("stackup doctor", "stackup logs "+firstFailure.svc)
-		return fmt.Errorf("service %q failed health check: %w", firstFailure.svc, firstFailure.err)
+	var failedNames []string
+	var firstErr error
+	for _, f := range failures {
+		o.p.ServiceFailed(f.svc, f.err)
+		o.surfaceLogs(ctx, f.svc, fetcher)
+		failedNames = append(failedNames, f.svc)
+		if firstErr == nil {
+			firstErr = f.err
+		}
 	}
-	return nil
+
+	if len(failedNames) > 0 {
+		o.p.Hint("stackup doctor", "stackup logs <service>")
+	}
+
+	return failedNames, firstErr, nil
 }
 
 func (o *Orchestrator) surfaceLogs(ctx context.Context, svc string, fetcher LogFetcher) {

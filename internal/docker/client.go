@@ -1,3 +1,4 @@
+// Package docker wraps the Docker Engine API for container operations.
 package docker
 
 import (
@@ -11,10 +12,12 @@ import (
 	dockerclient "github.com/docker/docker/client"
 )
 
+// Client provides high-level container operations on top of the Docker SDK.
 type Client struct {
 	cli *dockerclient.Client
 }
 
+// NewClient connects to the Docker daemon using environment configuration.
 func NewClient() (*Client, error) {
 	cli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 	if err != nil {
@@ -23,10 +26,13 @@ func NewClient() (*Client, error) {
 	return &Client{cli: cli}, nil
 }
 
+// Close releases the underlying Docker client connection.
 func (c *Client) Close() error { return c.cli.Close() }
 
+// Raw returns the underlying Docker SDK client for advanced operations.
 func (c *Client) Raw() *dockerclient.Client { return c.cli }
 
+// ContainerIDByName finds a running container by its compose service label.
 func (c *Client) ContainerIDByName(serviceName string) (string, error) {
 	ctx := context.Background()
 	f := filters.NewArgs(filters.Arg("label", "com.docker.compose.service="+serviceName))
@@ -40,6 +46,7 @@ func (c *Client) ContainerIDByName(serviceName string) (string, error) {
 	return list[0].ID, nil
 }
 
+// Status returns the health or running state of a container.
 func (c *Client) Status(ctx context.Context, containerID string) (string, error) {
 	info, err := c.cli.ContainerInspect(ctx, containerID)
 	if err != nil {
@@ -54,6 +61,7 @@ func (c *Client) Status(ctx context.Context, containerID string) (string, error)
 	return info.State.Status, nil
 }
 
+// TailLogs writes the last N lines of container logs to w.
 func (c *Client) TailLogs(ctx context.Context, containerID string, lines int, w io.Writer) error {
 	opts := container.LogsOptions{
 		ShowStdout: true,
@@ -69,6 +77,7 @@ func (c *Client) TailLogs(ctx context.Context, containerID string, lines int, w 
 	return err
 }
 
+// Logs streams container logs to w, optionally following new output.
 func (c *Client) Logs(ctx context.Context, containerID string, follow bool, w io.Writer) error {
 	opts := container.LogsOptions{
 		ShowStdout: true,
@@ -84,10 +93,12 @@ func (c *Client) Logs(ctx context.Context, containerID string, follow bool, w io
 	return err
 }
 
+// Restart stops and restarts a container.
 func (c *Client) Restart(ctx context.Context, containerID string) error {
 	return c.cli.ContainerRestart(ctx, containerID, container.StopOptions{})
 }
 
+// ExecShell opens an interactive shell (bash or sh) inside the container.
 func (c *Client) ExecShell(ctx context.Context, containerID string, in io.Reader, out io.Writer) error {
 	for _, shell := range []string{"bash", "sh"} {
 		exec, err := c.cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{

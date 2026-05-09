@@ -21,6 +21,7 @@ func NewRootCmd(version, commit, date string) *cobra.Command {
 		newRunCmd(),
 		newDoctorCmd(),
 		newCheckCmd(),
+		newCompletionCmd(),
 	)
 	return root
 }

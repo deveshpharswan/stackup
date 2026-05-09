@@ -39,6 +39,7 @@ func newCheckCmd() *cobra.Command {
 		serviceName string
 		format      string
 		quiet       bool
+		profile     string
 	)
 
 	cmd := &cobra.Command{
@@ -61,6 +62,16 @@ func newCheckCmd() *cobra.Command {
 			var targets []string
 			if serviceName != "" {
 				targets = []string{serviceName}
+			} else if profile != "" {
+				profileSvcs, err := cfg.ProfileServices(profile)
+				if err != nil {
+					return err
+				}
+				for _, svc := range profileSvcs {
+					if _, ok := checkers[svc]; ok {
+						targets = append(targets, svc)
+					}
+				}
 			} else {
 				for name := range checkers {
 					targets = append(targets, name)
@@ -126,6 +137,7 @@ func newCheckCmd() *cobra.Command {
 	cmd.Flags().StringVar(&serviceName, "service", "", "Check a single service by name")
 	cmd.Flags().StringVar(&format, "format", "text", "Output format: text or json")
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "Suppress output, exit code only")
+	cmd.Flags().StringVar(&profile, "profile", "", "Check only services in the named profile")
 
 	return cmd
 }

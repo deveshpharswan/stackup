@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -22,7 +23,12 @@ import (
 )
 
 func newUpCmd() *cobra.Command {
-	return &cobra.Command{
+	var (
+		profile string
+		partial bool
+	)
+
+	cmd := &cobra.Command{
 		Use:   "up",
 		Short: "Validate .env and start all services in health-gated order",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -55,6 +61,15 @@ func newUpCmd() *cobra.Command {
 				return fmt.Errorf("reading compose file: %w", err)
 			}
 
+			// Filter by profile if specified
+			if profile != "" {
+				profileSvcs, err := cfg.ProfileServices(profile)
+				if err != nil {
+					return err
+				}
+				composeServices = filterWithDeps(composeServices, profileSvcs)
+			}
+
 			tiers, err := orchestrator.BuildTiers(composeServices)
 			if err != nil {
 				return err
@@ -74,19 +89,25 @@ func newUpCmd() *cobra.Command {
 			}
 			defer logClient.Close()
 
+			startFn := func(ctx context.Context, svcs []string) error {
+				cmdArgs := append([]string{"compose", "up", "-d"}, svcs...)
+				c := exec.CommandContext(ctx, "docker", cmdArgs...)
+				c.Env = childEnv
+				c.Stdout = os.Stdout
+				c.Stderr = os.Stderr
+				return c.Run()
+			}
+
 			start := time.Now()
+
+			if partial {
+				return runPartial(ctx, o, tiers, composeServices, startFn, checkers, logClient, cfg, cmd, p, start)
+			}
+
 			for i, tier := range tiers {
 				var tierDeps []string
 				if i > 0 {
 					tierDeps = flattenTiers(tiers[:i])
-				}
-				startFn := func(ctx context.Context, svcs []string) error {
-					cmdArgs := append([]string{"compose", "up", "-d"}, svcs...)
-					c := exec.CommandContext(ctx, "docker", cmdArgs...)
-					c.Env = childEnv
-					c.Stdout = os.Stdout
-					c.Stderr = os.Stderr
-					return c.Run()
 				}
 				if err := o.StartTier(ctx, tier, tierDeps, startFn, checkers, logClient); err != nil {
 					return err
@@ -108,6 +129,88 @@ func newUpCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&profile, "profile", "", "Start only services in the named profile (includes dependencies)")
+	cmd.Flags().BoolVar(&partial, "partial", false, "Continue starting independent services even if some fail")
+	return cmd
+}
+
+func runPartial(ctx context.Context, o *orchestrator.Orchestrator, tiers []orchestrator.Tier, composeServices map[string][]string, startFn func(context.Context, []string) error, checkers map[string]health.Named, logClient *docker.Client, cfg *config.Config, cmd *cobra.Command, p *printer.Printer, start time.Time) error {
+	failed := make(map[string]bool)
+	var totalServices, healthyCount int
+
+	for i, tier := range tiers {
+		// Filter out services whose dependencies failed
+		var viableTier orchestrator.Tier
+		for _, svc := range tier {
+			skip := false
+			for _, dep := range composeServices[svc] {
+				if failed[dep] {
+					skip = true
+					break
+				}
+			}
+			if skip {
+				failed[svc] = true
+				p.ServiceFailed(svc, fmt.Errorf("skipped: dependency failed"))
+			} else {
+				viableTier = append(viableTier, svc)
+			}
+		}
+
+		totalServices += len(tier)
+		if len(viableTier) == 0 {
+			continue
+		}
+
+		var tierDeps []string
+		if i > 0 {
+			tierDeps = flattenTiers(tiers[:i])
+		}
+
+		tierFailed, err := o.StartTierPartial(ctx, viableTier, tierDeps, startFn, checkers, logClient)
+		if err != nil {
+			return err
+		}
+		for _, f := range tierFailed {
+			failed[f] = true
+		}
+		healthyCount += len(viableTier) - len(tierFailed)
+
+		// Run after_start hooks for healthy services
+		hookExec := hooks.NewExecutor(cmd.OutOrStdout())
+		for _, svc := range viableTier {
+			if failed[svc] {
+				continue
+			}
+			svcCfg, ok := cfg.Services[svc]
+			if !ok || svcCfg.Hooks == nil || len(svcCfg.Hooks.AfterStart) == 0 {
+				continue
+			}
+			if err := hookExec.RunAfterStart(ctx, svc, svcCfg.Hooks.AfterStart); err != nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "  ! hook failed for %s: %v\n", svc, err)
+			}
+		}
+	}
+
+	if len(failed) == 0 {
+		p.Ready(time.Since(start))
+		return nil
+	}
+
+	pct := (healthyCount * 100) / totalServices
+	fmt.Fprintf(cmd.OutOrStdout(), "\n⚠ Stack %d%% ready (%d/%d services healthy)\n", pct, healthyCount, totalServices)
+	failedNames := make([]string, 0, len(failed))
+	for name := range failed {
+		failedNames = append(failedNames, name)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "  Failed: %s\n", strings.Join(failedNames, ", "))
+	fmt.Fprintf(cmd.OutOrStdout(), "  Duration: %s\n", formatUpDuration(time.Since(start)))
+	return &ExitError{Code: 3, Message: fmt.Sprintf("partial success: %d/%d services healthy", healthyCount, totalServices)}
+}
+
+func formatUpDuration(d time.Duration) string {
+	return fmt.Sprintf("%.1fs", d.Seconds())
 }
 
 func buildCheckers(cfg *config.Config, dc *dockerclient.Client) map[string]health.Named {
@@ -157,4 +260,35 @@ func flattenTiers(tiers []orchestrator.Tier) []string {
 		out = append(out, t...)
 	}
 	return out
+}
+
+// filterWithDeps returns the subset of allDeps containing only the named services
+// and their transitive dependencies.
+func filterWithDeps(allDeps map[string][]string, services []string) map[string][]string {
+	needed := make(map[string]bool)
+	var resolve func(string)
+	resolve = func(svc string) {
+		if needed[svc] {
+			return
+		}
+		needed[svc] = true
+		for _, dep := range allDeps[svc] {
+			resolve(dep)
+		}
+	}
+	for _, svc := range services {
+		resolve(svc)
+	}
+
+	filtered := make(map[string][]string, len(needed))
+	for svc := range needed {
+		var deps []string
+		for _, d := range allDeps[svc] {
+			if needed[d] {
+				deps = append(deps, d)
+			}
+		}
+		filtered[svc] = deps
+	}
+	return filtered
 }

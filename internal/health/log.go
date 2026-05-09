@@ -21,6 +21,7 @@ type LogChecker struct {
 	interval time.Duration
 }
 
+// NewLogChecker creates a health checker that scans container stdout/stderr for pattern.
 func NewLogChecker(cli *dockerclient.Client, service, pattern string, timeout, interval time.Duration) *LogChecker {
 	return &LogChecker{
 		cli:      cli,

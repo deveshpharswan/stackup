@@ -1,3 +1,4 @@
+// Package health provides health check implementations for Docker services.
 package health
 
 import "context"

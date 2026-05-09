@@ -1,3 +1,4 @@
+// Package scaffold parses docker-compose.yml files and generates stackup.yml configs.
 package scaffold
 
 import (
@@ -148,6 +149,8 @@ func parseDependsOnRich(v interface{}) []Dependency {
 	return nil
 }
 
+// Generate creates a stackup.yml configuration from a docker-compose.yml file,
+// auto-detecting health check types for known images.
 func Generate(composeFilePath, exampleFile string) (string, error) {
 	data, err := os.ReadFile(composeFilePath)
 	if err != nil {

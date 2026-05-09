@@ -1,3 +1,4 @@
+// Package env validates environment variables against a schema and example file.
 package env
 
 import (
@@ -10,23 +11,28 @@ import (
 	"github.com/deveshpharswan/stackup/internal/config"
 )
 
+// ValidationError represents a single env variable validation failure.
 type ValidationError struct {
 	Key     string
 	Message string
 }
 
+// Error implements the error interface.
 func (e ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Key, e.Message)
 }
 
+// Result holds the outcome of env validation.
 type Result struct {
 	Errors []ValidationError
 }
 
+// Valid returns true if no validation errors were found.
 func (r Result) Valid() bool {
 	return len(r.Errors) == 0
 }
 
+// Validate checks env vars against an example file and schema.
 func Validate(envFile, exampleFile string, schema map[string]config.EnvVar) Result {
 	result, _ := ValidateWithDefaults(envFile, exampleFile, schema)
 	return result

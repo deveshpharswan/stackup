@@ -8,6 +8,7 @@ import (
 	dockerclient "github.com/docker/docker/client"
 )
 
+// DockerChecker polls the Docker API for a container's built-in HEALTHCHECK status.
 type DockerChecker struct {
 	cli         *dockerclient.Client
 	containerID string
@@ -15,10 +16,12 @@ type DockerChecker struct {
 	interval    time.Duration
 }
 
+// NewDockerChecker creates a health checker that inspects the container's health state.
 func NewDockerChecker(cli *dockerclient.Client, containerID string, timeout, interval time.Duration) *DockerChecker {
 	return &DockerChecker{cli: cli, containerID: containerID, timeout: timeout, interval: interval}
 }
 
+// Check polls Docker until the container reports healthy or timeout.
 func (c *DockerChecker) Check(ctx context.Context) error {
 	err := Poll(ctx, c.timeout, c.interval, func() error {
 		info, err := c.cli.ContainerInspect(ctx, c.containerID)

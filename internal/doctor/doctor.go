@@ -1,3 +1,4 @@
+// Package doctor runs automated diagnostics on the development stack.
 package doctor
 
 import (

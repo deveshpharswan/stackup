@@ -1,3 +1,4 @@
+// Package config handles loading and validating the stackup.yml configuration file.
 package config
 
 import (
@@ -8,38 +9,51 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Config represents the top-level stackup.yml structure.
 type Config struct {
 	Version  string             `yaml:"version"`
 	Env      EnvConfig          `yaml:"env"`
 	Services map[string]Service `yaml:"services"`
 	Commands map[string]Command `yaml:"commands"`
+	Profiles map[string]Profile `yaml:"profiles"`
 }
 
+// Profile defines a named subset of services to start.
+type Profile struct {
+	Services []string `yaml:"services"`
+}
+
+// EnvConfig holds the environment variable schema definitions.
 type EnvConfig struct {
 	Schema map[string]EnvVar `yaml:"schema"`
 }
 
+// EnvVar describes a single environment variable's constraints.
 type EnvVar struct {
 	Type     string `yaml:"type"`
 	Required bool   `yaml:"required"`
 	Default  string `yaml:"default"`
 }
 
+// Service defines the health check and lifecycle hooks for a compose service.
 type Service struct {
 	Health *HealthCheck `yaml:"health"`
 	Hooks  *Hooks       `yaml:"hooks"`
 }
 
+// Hooks contains lifecycle hook definitions for a service.
 type Hooks struct {
 	AfterStart []HookAction `yaml:"after_start"`
 }
 
+// HookAction describes a single hook command to execute inside a container.
 type HookAction struct {
 	Name    string `yaml:"name"`
 	Service string `yaml:"service"`
 	Run     string `yaml:"run"`
 }
 
+// HealthCheck defines how to verify a service is ready.
 type HealthCheck struct {
 	Type     string `yaml:"type"`
 	URL      string `yaml:"url"`
@@ -50,11 +64,13 @@ type HealthCheck struct {
 	Interval string `yaml:"interval"`
 }
 
+// Command defines a named command that runs inside a service container.
 type Command struct {
 	Service string `yaml:"service"`
 	Run     string `yaml:"run"`
 }
 
+// Load reads and validates a stackup.yml file at the given path.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -123,4 +139,17 @@ func LoadOrEmpty(path string) *Config {
 		return &Config{}
 	}
 	return cfg
+}
+
+// ProfileServices returns the service names for a given profile.
+// Returns an error if the profile is not defined.
+func (c *Config) ProfileServices(name string) ([]string, error) {
+	if c.Profiles == nil {
+		return nil, fmt.Errorf("no profiles defined in config")
+	}
+	p, ok := c.Profiles[name]
+	if !ok {
+		return nil, fmt.Errorf("profile %q not found", name)
+	}
+	return p.Services, nil
 }
