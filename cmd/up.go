@@ -104,12 +104,15 @@ func newUpCmd() *cobra.Command {
 				return runPartial(ctx, o, tiers, composeServices, startFn, checkers, logClient, cfg, cmd, p, start)
 			}
 
+			var allResults []printer.ServiceResult
 			for i, tier := range tiers {
 				var tierDeps []string
 				if i > 0 {
 					tierDeps = flattenTiers(tiers[:i])
 				}
-				if err := o.StartTier(ctx, tier, tierDeps, startFn, checkers, logClient); err != nil {
+				results, err := o.StartTierWithResults(ctx, tier, tierDeps, startFn, checkers, logClient)
+				allResults = append(allResults, results...)
+				if err != nil {
 					return err
 				}
 
@@ -125,7 +128,12 @@ func newUpCmd() *cobra.Command {
 					}
 				}
 			}
-			p.Ready(time.Since(start))
+			elapsed := time.Since(start)
+			if len(allResults) > 0 {
+				p.SummaryTable(allResults, elapsed)
+			} else {
+				p.Ready(elapsed)
+			}
 			return nil
 		},
 	}

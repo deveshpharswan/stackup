@@ -62,7 +62,7 @@ func (o *Orchestrator) PreFlight(envFile, exampleFile string, schema map[string]
 // StartTier starts all services in a tier and waits for their health checks to pass.
 // Health checks run in parallel. On failure, it surfaces container logs and suggests fixes.
 func (o *Orchestrator) StartTier(ctx context.Context, tier Tier, deps []string, startFn func(context.Context, []string) error, checkers map[string]health.Named, fetcher LogFetcher) error {
-	failed, firstErr, err := o.startTierInternal(ctx, tier, deps, startFn, checkers, fetcher)
+	_, failed, firstErr, err := o.startTierInternal(ctx, tier, deps, startFn, checkers, fetcher)
 	if err != nil {
 		return err
 	}
@@ -72,15 +72,27 @@ func (o *Orchestrator) StartTier(ctx context.Context, tier Tier, deps []string, 
 	return nil
 }
 
+// StartTierWithResults is like StartTier but also returns service results for the summary table.
+func (o *Orchestrator) StartTierWithResults(ctx context.Context, tier Tier, deps []string, startFn func(context.Context, []string) error, checkers map[string]health.Named, fetcher LogFetcher) ([]printer.ServiceResult, error) {
+	results, failed, firstErr, err := o.startTierInternal(ctx, tier, deps, startFn, checkers, fetcher)
+	if err != nil {
+		return nil, err
+	}
+	if len(failed) > 0 {
+		return results, fmt.Errorf("service %q failed health check: %w", failed[0], firstErr)
+	}
+	return results, nil
+}
+
 // StartTierPartial starts all services in a tier and returns the names of failed services
 // instead of stopping on first failure. Returns a non-nil error only for startup failures
 // (not health check failures).
 func (o *Orchestrator) StartTierPartial(ctx context.Context, tier Tier, deps []string, startFn func(context.Context, []string) error, checkers map[string]health.Named, fetcher LogFetcher) ([]string, error) {
-	failed, _, err := o.startTierInternal(ctx, tier, deps, startFn, checkers, fetcher)
+	_, failed, _, err := o.startTierInternal(ctx, tier, deps, startFn, checkers, fetcher)
 	return failed, err
 }
 
-func (o *Orchestrator) startTierInternal(ctx context.Context, tier Tier, deps []string, startFn func(context.Context, []string) error, checkers map[string]health.Named, fetcher LogFetcher) ([]string, error, error) {
+func (o *Orchestrator) startTierInternal(ctx context.Context, tier Tier, deps []string, startFn func(context.Context, []string) error, checkers map[string]health.Named, fetcher LogFetcher) ([]printer.ServiceResult, []string, error, error) {
 	label := "Starting tier"
 	if len(deps) > 0 {
 		label += fmt.Sprintf("  (depends on: %s)", strings.Join(deps, ", "))
@@ -88,7 +100,7 @@ func (o *Orchestrator) startTierInternal(ctx context.Context, tier Tier, deps []
 	o.p.Phase(label)
 
 	if err := startFn(ctx, tier); err != nil {
-		return nil, nil, fmt.Errorf("failed to start tier %v: %w", []string(tier), err)
+		return nil, nil, nil, fmt.Errorf("failed to start tier %v: %w", []string(tier), err)
 	}
 
 	// Determine which services have health checks.
@@ -103,8 +115,16 @@ func (o *Orchestrator) startTierInternal(ctx context.Context, tier Tier, deps []
 		}
 	}
 	if len(targets) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
+
+	// Start spinner while health checks run
+	svcNames := make([]string, 0, len(targets))
+	for _, t := range targets {
+		svcNames = append(svcNames, t.svc)
+	}
+	spinner := printer.NewSpinner(o.p.Writer(), o.p.IsTTY())
+	spinner.Start(fmt.Sprintf("checking %s...", strings.Join(svcNames, ", ")))
 
 	// Run health checks in parallel.
 	type checkResult struct {
@@ -140,11 +160,26 @@ func (o *Orchestrator) startTierInternal(ctx context.Context, tier Tier, deps []
 
 	// Collect results, printing healthy services as they arrive.
 	var failures []checkResult
+	var serviceResults []printer.ServiceResult
 	for r := range results {
 		if r.err != nil {
 			failures = append(failures, r)
+			serviceResults = append(serviceResults, printer.ServiceResult{
+				Name: r.svc, Label: r.label, Elapsed: r.elapsed, Err: r.err,
+			})
 		} else {
-			o.p.ServiceHealthy(r.svc, r.label, r.elapsed)
+			serviceResults = append(serviceResults, printer.ServiceResult{
+				Name: r.svc, Label: r.label, Elapsed: r.elapsed,
+			})
+		}
+	}
+
+	spinner.Stop()
+
+	// Print results
+	for _, r := range serviceResults {
+		if r.Err == nil {
+			o.p.ServiceHealthy(r.Name, r.Label, r.Elapsed)
 		}
 	}
 
@@ -163,7 +198,7 @@ func (o *Orchestrator) startTierInternal(ctx context.Context, tier Tier, deps []
 		o.p.Hint("stackup doctor", "stackup logs <service>")
 	}
 
-	return failedNames, firstErr, nil
+	return serviceResults, failedNames, firstErr, nil
 }
 
 func (o *Orchestrator) surfaceLogs(ctx context.Context, svc string, fetcher LogFetcher) {
