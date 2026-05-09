@@ -27,6 +27,7 @@ func (m HelpModel) View(width, height int, active ViewType) string {
 			{"r", "Restart service"},
 			{"s", "Shell into container"},
 			{"x", "Stop service"},
+			{"e", "Error zoom (unhealthy only)"},
 			{"d", "Doctor diagnostics"},
 			{"g", "Dependency graph"},
 			{"/", "Filter services"},

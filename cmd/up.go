@@ -26,6 +26,7 @@ func newUpCmd() *cobra.Command {
 	var (
 		profile string
 		partial bool
+		only    string
 	)
 
 	cmd := &cobra.Command{
@@ -68,6 +69,20 @@ func newUpCmd() *cobra.Command {
 					return err
 				}
 				composeServices = filterWithDeps(composeServices, profileSvcs)
+			}
+
+			// Filter by --only if specified
+			if only != "" {
+				onlySvcs := strings.Split(only, ",")
+				for i := range onlySvcs {
+					onlySvcs[i] = strings.TrimSpace(onlySvcs[i])
+				}
+				for _, svc := range onlySvcs {
+					if _, exists := composeServices[svc]; !exists {
+						return fmt.Errorf("unknown service %q (not in docker-compose.yml)", svc)
+					}
+				}
+				composeServices = filterWithDeps(composeServices, onlySvcs)
 			}
 
 			tiers, err := orchestrator.BuildTiers(composeServices)
@@ -140,6 +155,7 @@ func newUpCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&profile, "profile", "", "Start only services in the named profile (includes dependencies)")
 	cmd.Flags().BoolVar(&partial, "partial", false, "Continue starting independent services even if some fail")
+	cmd.Flags().StringVar(&only, "only", "", "Start only the named services and their dependencies (comma-separated)")
 	return cmd
 }
 

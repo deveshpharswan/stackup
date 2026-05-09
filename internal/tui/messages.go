@@ -13,11 +13,22 @@ type ServiceInfo struct {
 	Ports  string
 	Tier   int
 	Uptime time.Duration
+	CPU    float64
+	Memory float64
 }
 
 type ServiceUpdateMsg struct {
 	Services []ServiceInfo
 	Err      error
+}
+
+type StatsUpdateMsg struct {
+	Stats map[string]ServiceStats
+}
+
+type ServiceStats struct {
+	CPU    float64
+	Memory float64
 }
 
 type LogLineMsg struct {

@@ -132,6 +132,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m = m.pushView(ViewGraph)
 				return m, m.graph.Init()
 			}
+		case "e":
+			if m.activeView == ViewServices {
+				m.services = m.services.ToggleErrorZoom()
+				return m, nil
+			}
 		case "enter":
 			if m.activeView == ViewServices {
 				if svc := m.services.Selected(); svc != "" {
@@ -216,7 +221,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.(type) {
-	case TickMsg, ServiceUpdateMsg:
+	case TickMsg, ServiceUpdateMsg, StatsUpdateMsg, statsTickMsg:
 		newSvc, cmd := m.services.Update(msg)
 		m.services = newSvc
 		cmds = append(cmds, cmd)
@@ -225,7 +230,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.activeView {
 	case ViewServices:
 		switch msg.(type) {
-		case TickMsg, ServiceUpdateMsg:
+		case TickMsg, ServiceUpdateMsg, StatsUpdateMsg, statsTickMsg:
 		default:
 			newSvc, cmd := m.services.Update(msg)
 			m.services = newSvc

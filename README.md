@@ -154,6 +154,8 @@ A real-time terminal dashboard (like lazydocker / k9s) for your dev stack:
 **Features:**
 
 - Live service status with health indicators
+- CPU/memory sparklines per service (real-time resource usage)
+- Error zoom — press `e` to show only unhealthy services
 - Stream logs for any service (with color-coded output)
 - Restart services and re-run health checks
 - Dependency graph visualization
@@ -168,6 +170,7 @@ A real-time terminal dashboard (like lazydocker / k9s) for your dev stack:
 | Command | What it does |
 | ------- | ------------ |
 | `stackup up` | Validate env → start services in health-gated order |
+| `stackup up --only api,db` | Start only named services and their dependencies |
 | `stackup down` | Stop all containers |
 | `stackup ui` | Open interactive terminal dashboard |
 | `stackup status` | Show running container states |

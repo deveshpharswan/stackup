@@ -12,19 +12,23 @@ import (
 )
 
 type ServicesModel struct {
-	services []ServiceInfo
-	filtered []ServiceInfo
-	cursor   int
-	filter   string
-	err      error
+	services     []ServiceInfo
+	filtered     []ServiceInfo
+	cursor       int
+	filter       string
+	errorZoom    bool
+	statsHistory map[string]*StatsHistory
+	err          error
 }
 
 func NewServicesModel() ServicesModel {
-	return ServicesModel{}
+	return ServicesModel{
+		statsHistory: make(map[string]*StatsHistory),
+	}
 }
 
 func (m ServicesModel) Init() tea.Cmd {
-	return tea.Batch(pollServices(), tickEvery(2*time.Second))
+	return tea.Batch(pollServices(), tickEvery(2*time.Second), pollStats(), statsTickEvery(5*time.Second))
 }
 
 func (m ServicesModel) Update(msg tea.Msg) (ServicesModel, tea.Cmd) {
@@ -37,6 +41,26 @@ func (m ServicesModel) Update(msg tea.Msg) (ServicesModel, tea.Cmd) {
 		m.services = msg.Services
 		m.err = nil
 		m.applyFilter()
+	case StatsUpdateMsg:
+		if msg.Stats != nil {
+			for name, s := range msg.Stats {
+				h, ok := m.statsHistory[name]
+				if !ok {
+					h = &StatsHistory{}
+					m.statsHistory[name] = h
+				}
+				h.Push(s.CPU, s.Memory)
+			}
+			for i := range m.services {
+				if s, ok := msg.Stats[m.services[i].Name]; ok {
+					m.services[i].CPU = s.CPU
+					m.services[i].Memory = s.Memory
+				}
+			}
+			m.applyFilter()
+		}
+	case statsTickMsg:
+		return m, tea.Batch(pollStats(), statsTickEvery(5*time.Second))
 	case TickMsg:
 		return m, tea.Batch(pollServices(), tickEvery(2*time.Second))
 	case tea.KeyMsg:
@@ -82,8 +106,11 @@ func (m ServicesModel) View(width, height int) string {
 	}
 
 	var b strings.Builder
-	header := fmt.Sprintf("  %-16s %-12s %-12s %-20s %-6s %s",
-		"NAME", "STATE", "HEALTH", "PORT", "TIER", "UPTIME")
+	if m.errorZoom {
+		b.WriteString(styleFailed.Render("  [ERROR ZOOM]") + " " + styleDim.Render("press e to show all") + "\n")
+	}
+	header := fmt.Sprintf("  %-14s %-10s %-10s %-8s %-10s %s  %s",
+		"NAME", "STATE", "HEALTH", "CPU", "MEM", "UPTIME", "ACTIVITY")
 	b.WriteString(styleInfo.Bold(true).Render(header) + "\n")
 	b.WriteString(styleDim.Render("  "+strings.Repeat("─", width-4)) + "\n")
 
@@ -118,15 +145,17 @@ func (m ServicesModel) View(width, height int) string {
 }
 
 func (m ServicesModel) renderRow(svc ServiceInfo, selected bool, width int) string {
-	tier := fmt.Sprintf("%d", svc.Tier)
-	ports := svc.Ports
-	if ports == "" {
-		ports = "—"
-	}
 	uptime := formatUptime(svc.Uptime)
+	cpuStr := fmt.Sprintf("%.1f%%", svc.CPU)
+	memStr := fmt.Sprintf("%.1f%%", svc.Memory)
 
-	row := fmt.Sprintf("  %-16s %-12s %-12s %-20s %-6s %s",
-		svc.Name, svc.State, svc.Health, ports, tier, uptime)
+	spark := ""
+	if h, ok := m.statsHistory[svc.Name]; ok && len(h.cpu) > 0 {
+		spark = renderSparkline(h.cpu, 100)
+	}
+
+	row := fmt.Sprintf("  %-14s %-10s %-10s %-8s %-10s %-7s %s",
+		svc.Name, svc.State, svc.Health, cpuStr, memStr, uptime, spark)
 
 	if selected {
 		return styleSelected.Width(width).Render(row)
@@ -166,18 +195,40 @@ func (m ServicesModel) SetFilter(f string) ServicesModel {
 	return m
 }
 
-func (m *ServicesModel) applyFilter() {
+func (m ServicesModel) ToggleErrorZoom() ServicesModel {
+	m.errorZoom = !m.errorZoom
+	m.applyFilter()
+	m.cursor = 0
+	return m
+}
+
+func (m ServicesModel) ErrorZoom() bool {
+	return m.errorZoom
+}
+
+	func (m *ServicesModel) applyFilter() {
+	var base []ServiceInfo
+	if m.errorZoom {
+		for _, s := range m.services {
+			if s.Health == "unhealthy" || s.State == "exited" || s.State == "restarting" {
+				base = append(base, s)
+			}
+		}
+	} else {
+		base = m.services
+	}
+
 	if m.filter == "" {
-		m.filtered = m.services
+		m.filtered = base
 		return
 	}
 	re, err := regexp.Compile("(?i)" + m.filter)
 	if err != nil {
-		m.filtered = m.services
+		m.filtered = base
 		return
 	}
 	var filtered []ServiceInfo
-	for _, s := range m.services {
+	for _, s := range base {
 		if re.MatchString(s.Name) {
 			filtered = append(filtered, s)
 		}
