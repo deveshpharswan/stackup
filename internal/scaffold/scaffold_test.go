@@ -68,3 +68,49 @@ func TestDetectHealthDefault_UnknownImage(t *testing.T) {
 	def := scaffold.DetectHealthDefault("mycompany/custom-app:latest")
 	assert.Nil(t, def)
 }
+
+func TestParseServicesRich_Conditions(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	composePath := filepath.Join(dir, "docker-compose.yml")
+	os.WriteFile(composePath, []byte(`services:
+  postgres:
+    image: postgres:15
+  redis:
+    image: redis:7
+  api:
+    build: ./api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+  worker:
+    build: ./worker
+    depends_on:
+      - postgres
+`), 0644)
+
+	deps, err := scaffold.ParseServicesRich(composePath)
+	require.NoError(t, err)
+
+	// api should have two deps with conditions
+	apiDeps := deps["api"]
+	require.Len(t, apiDeps, 2)
+	conditions := map[string]string{}
+	for _, d := range apiDeps {
+		conditions[d.Service] = d.Condition
+	}
+	assert.Equal(t, "service_healthy", conditions["postgres"])
+	assert.Equal(t, "service_started", conditions["redis"])
+
+	// worker uses list syntax — defaults to service_started
+	workerDeps := deps["worker"]
+	require.Len(t, workerDeps, 1)
+	assert.Equal(t, "postgres", workerDeps[0].Service)
+	assert.Equal(t, "service_started", workerDeps[0].Condition)
+
+	// postgres and redis have no deps
+	assert.Empty(t, deps["postgres"])
+	assert.Empty(t, deps["redis"])
+}
