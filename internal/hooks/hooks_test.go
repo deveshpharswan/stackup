@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stackup-dev/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 

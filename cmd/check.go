@@ -4,12 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	dockerclient "github.com/docker/docker/client"
 	"github.com/spf13/cobra"
-	"github.com/stackup-dev/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/constants"
 )
+
+// ExitError wraps an exit code for CLI commands that need non-zero exits
+// without calling os.Exit directly (which breaks testability and defers).
+type ExitError struct {
+	Code    int
+	Message string
+}
+
+func (e *ExitError) Error() string { return e.Message }
 
 type checkResult struct {
 	Stack    string         `json:"stack"`
@@ -35,7 +44,7 @@ func newCheckCmd() *cobra.Command {
 		Short: "Check health of services (CI-friendly, exits 0=healthy, 2=unhealthy)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
-			cfg := config.LoadOrEmpty("stackup.yml")
+			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
 
 			dc, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 			if err != nil {
@@ -105,7 +114,7 @@ func newCheckCmd() *cobra.Command {
 			}
 
 			if !result.Healthy {
-				os.Exit(2)
+				return &ExitError{Code: 2, Message: "one or more services unhealthy"}
 			}
 			return nil
 		},

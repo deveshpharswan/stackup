@@ -109,9 +109,9 @@ func (c *Client) ExecShell(ctx context.Context, containerID string, in io.Reader
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			io.Copy(resp.Conn, in)
+			_, _ = io.Copy(resp.Conn, in)
 		}()
-		io.Copy(out, resp.Reader)
+		_, _ = io.Copy(out, resp.Reader)
 		wg.Wait()
 		return nil
 	}

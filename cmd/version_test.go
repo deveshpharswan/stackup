@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/stackup-dev/stackup/cmd"
+	"github.com/deveshpharswan/stackup/cmd"
 	"github.com/stretchr/testify/assert"
 )
 

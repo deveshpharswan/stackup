@@ -3,8 +3,8 @@ package env_test
 import (
 	"testing"
 
-	"github.com/stackup-dev/stackup/internal/config"
-	"github.com/stackup-dev/stackup/internal/env"
+	"github.com/deveshpharswan/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/env"
 	"github.com/stretchr/testify/assert"
 )
 

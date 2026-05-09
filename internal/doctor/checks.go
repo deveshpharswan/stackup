@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
-	"github.com/stackup-dev/stackup/internal/config"
-	"github.com/stackup-dev/stackup/internal/scaffold"
+	"github.com/deveshpharswan/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/scaffold"
 )
 
 // CheckPortConflicts verifies that ports configured in stackup.yml health checks are available.

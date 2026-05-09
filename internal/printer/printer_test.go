@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stackup-dev/stackup/internal/printer"
+	"github.com/deveshpharswan/stackup/internal/printer"
 	"github.com/stretchr/testify/assert"
 )
 

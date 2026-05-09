@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/stackup-dev/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/config"
 )
 
 // Executor runs lifecycle hooks for services.

@@ -4,9 +4,10 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/stackup-dev/stackup/internal/config"
-	"github.com/stackup-dev/stackup/internal/orchestrator"
-	"github.com/stackup-dev/stackup/internal/printer"
+	"github.com/deveshpharswan/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/constants"
+	"github.com/deveshpharswan/stackup/internal/orchestrator"
+	"github.com/deveshpharswan/stackup/internal/printer"
 )
 
 func newValidateCmd() *cobra.Command {
@@ -14,9 +15,9 @@ func newValidateCmd() *cobra.Command {
 		Use:   "validate",
 		Short: "Validate .env without starting any services",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := config.LoadOrEmpty("stackup.yml")
+			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
 			o := orchestrator.New(printer.New(cmd.OutOrStdout()))
-			if !o.PreFlight(".env", ".env.example", cfg.Env.Schema) {
+			if !o.PreFlight(constants.DefaultEnvFile, constants.DefaultExampleFile, cfg.Env.Schema) {
 				return fmt.Errorf("validation failed")
 			}
 			return nil

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stackup-dev/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/config"
 )
 
 func TestNeedsOnboarding_MissingEnv(t *testing.T) {

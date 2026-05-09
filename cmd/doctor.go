@@ -4,7 +4,8 @@ import (
 	"context"
 
 	"github.com/spf13/cobra"
-	"github.com/stackup-dev/stackup/internal/doctor"
+	"github.com/deveshpharswan/stackup/internal/constants"
+	"github.com/deveshpharswan/stackup/internal/doctor"
 )
 
 func newDoctorCmd() *cobra.Command {
@@ -14,10 +15,10 @@ func newDoctorCmd() *cobra.Command {
 		Long:  "Checks for port conflicts, crash loops, env drift, container status, and localhost misuse.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := &doctor.Options{
-				ComposeFile: "docker-compose.yml",
-				EnvFile:     ".env",
-				ExampleFile: ".env.example",
-				ConfigFile:  "stackup.yml",
+				ComposeFile: constants.DefaultComposeFile,
+				EnvFile:     constants.DefaultEnvFile,
+				ExampleFile: constants.DefaultExampleFile,
+				ConfigFile:  constants.DefaultConfigFile,
 			}
 
 			d := doctor.New()

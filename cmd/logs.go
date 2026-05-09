@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/stackup-dev/stackup/internal/docker"
+	"github.com/deveshpharswan/stackup/internal/docker"
 )
 
 func newLogsCmd() *cobra.Command {

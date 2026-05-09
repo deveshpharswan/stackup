@@ -8,14 +8,15 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/stackup-dev/stackup/internal/config"
-	"github.com/stackup-dev/stackup/internal/docker"
-	"github.com/stackup-dev/stackup/internal/health"
-	"github.com/stackup-dev/stackup/internal/hooks"
-	"github.com/stackup-dev/stackup/internal/onboard"
-	"github.com/stackup-dev/stackup/internal/orchestrator"
-	"github.com/stackup-dev/stackup/internal/printer"
-	"github.com/stackup-dev/stackup/internal/scaffold"
+	"github.com/deveshpharswan/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/constants"
+	"github.com/deveshpharswan/stackup/internal/docker"
+	"github.com/deveshpharswan/stackup/internal/health"
+	"github.com/deveshpharswan/stackup/internal/hooks"
+	"github.com/deveshpharswan/stackup/internal/onboard"
+	"github.com/deveshpharswan/stackup/internal/orchestrator"
+	"github.com/deveshpharswan/stackup/internal/printer"
+	"github.com/deveshpharswan/stackup/internal/scaffold"
 	dockerclient "github.com/docker/docker/client"
 )
 
@@ -26,21 +27,21 @@ func newUpCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 			p := printer.New(cmd.OutOrStdout())
-			cfg := config.LoadOrEmpty("stackup.yml")
+			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
 			o := orchestrator.New(p)
 
-			if onboard.NeedsOnboarding(".env") {
+			if onboard.NeedsOnboarding(constants.DefaultEnvFile) {
 				ob := onboard.New(cmd.OutOrStdout(), os.Stdin, cfg.Env.Schema)
-				if err := ob.Run(".env", ".env.example"); err != nil {
+				if err := ob.Run(constants.DefaultEnvFile, constants.DefaultExampleFile); err != nil {
 					return err
 				}
 			}
 
-			if !o.PreFlight(".env", ".env.example", cfg.Env.Schema) {
+			if !o.PreFlight(constants.DefaultEnvFile, constants.DefaultExampleFile, cfg.Env.Schema) {
 				return fmt.Errorf("pre-flight validation failed")
 			}
 
-			composeServices, err := scaffold.ParseServices("docker-compose.yml")
+			composeServices, err := scaffold.ParseServices(constants.DefaultComposeFile)
 			if err != nil {
 				return fmt.Errorf("reading compose file: %w", err)
 			}

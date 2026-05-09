@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stackup-dev/stackup/internal/docker"
+	"github.com/deveshpharswan/stackup/internal/docker"
 	"github.com/stretchr/testify/assert"
 )
 

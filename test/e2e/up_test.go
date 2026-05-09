@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stackup-dev/stackup/internal/config"
-	"github.com/stackup-dev/stackup/internal/health"
-	"github.com/stackup-dev/stackup/internal/orchestrator"
-	"github.com/stackup-dev/stackup/internal/printer"
+	"github.com/deveshpharswan/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/health"
+	"github.com/deveshpharswan/stackup/internal/orchestrator"
+	"github.com/deveshpharswan/stackup/internal/printer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

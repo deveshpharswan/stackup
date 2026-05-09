@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/stackup-dev/stackup/internal/config"
-	"github.com/stackup-dev/stackup/internal/env"
-	"github.com/stackup-dev/stackup/internal/health"
-	"github.com/stackup-dev/stackup/internal/printer"
+	"github.com/deveshpharswan/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/env"
+	"github.com/deveshpharswan/stackup/internal/health"
+	"github.com/deveshpharswan/stackup/internal/printer"
 )
 
 // LogFetcher abstracts container log retrieval for failure diagnostics.

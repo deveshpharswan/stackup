@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stackup-dev/stackup/internal/scaffold"
+	"github.com/deveshpharswan/stackup/internal/scaffold"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

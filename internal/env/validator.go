@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
-	"github.com/stackup-dev/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/config"
 )
 
 type ValidationError struct {

@@ -1,4 +1,4 @@
-module github.com/stackup-dev/stackup
+module github.com/deveshpharswan/stackup
 
 go 1.25.0
 

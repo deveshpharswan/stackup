@@ -6,8 +6,9 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/spf13/cobra"
-	"github.com/stackup-dev/stackup/internal/config"
-	"github.com/stackup-dev/stackup/internal/docker"
+	"github.com/deveshpharswan/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/constants"
+	"github.com/deveshpharswan/stackup/internal/docker"
 )
 
 func newRestartCmd() *cobra.Command {
@@ -31,7 +32,7 @@ func newRestartCmd() *cobra.Command {
 			if err := c.Restart(ctx, id); err != nil {
 				return err
 			}
-			cfg := config.LoadOrEmpty("stackup.yml")
+			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
 			svc, ok := cfg.Services[svcName]
 			if !ok || svc.Health == nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s restarted\n", svcName)
