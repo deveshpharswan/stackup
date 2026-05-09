@@ -11,6 +11,7 @@ import (
 	"github.com/stackup-dev/stackup/internal/config"
 	"github.com/stackup-dev/stackup/internal/docker"
 	"github.com/stackup-dev/stackup/internal/health"
+	"github.com/stackup-dev/stackup/internal/hooks"
 	"github.com/stackup-dev/stackup/internal/onboard"
 	"github.com/stackup-dev/stackup/internal/orchestrator"
 	"github.com/stackup-dev/stackup/internal/printer"
@@ -78,6 +79,18 @@ func newUpCmd() *cobra.Command {
 				}
 				if err := o.StartTier(ctx, tier, tierDeps, startFn, checkers, logClient); err != nil {
 					return err
+				}
+
+				// Run after_start hooks for services in this tier
+				hookExec := hooks.NewExecutor(cmd.OutOrStdout())
+				for _, svc := range tier {
+					svcCfg, ok := cfg.Services[svc]
+					if !ok || svcCfg.Hooks == nil || len(svcCfg.Hooks.AfterStart) == 0 {
+						continue
+					}
+					if err := hookExec.RunAfterStart(ctx, svc, svcCfg.Hooks.AfterStart); err != nil {
+						return fmt.Errorf("after_start hook failed for %s: %w", svc, err)
+					}
 				}
 			}
 			p.Ready(time.Since(start))

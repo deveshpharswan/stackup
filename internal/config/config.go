@@ -25,6 +25,17 @@ type EnvVar struct {
 
 type Service struct {
 	Health *HealthCheck `yaml:"health"`
+	Hooks  *Hooks       `yaml:"hooks"`
+}
+
+type Hooks struct {
+	AfterStart []HookAction `yaml:"after_start"`
+}
+
+type HookAction struct {
+	Name    string `yaml:"name"`
+	Service string `yaml:"service"`
+	Run     string `yaml:"run"`
 }
 
 type HealthCheck struct {
