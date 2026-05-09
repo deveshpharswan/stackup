@@ -11,6 +11,7 @@ import (
 	"github.com/stackup-dev/stackup/internal/config"
 	"github.com/stackup-dev/stackup/internal/docker"
 	"github.com/stackup-dev/stackup/internal/health"
+	"github.com/stackup-dev/stackup/internal/onboard"
 	"github.com/stackup-dev/stackup/internal/orchestrator"
 	"github.com/stackup-dev/stackup/internal/printer"
 	"github.com/stackup-dev/stackup/internal/scaffold"
@@ -26,6 +27,13 @@ func newUpCmd() *cobra.Command {
 			p := printer.New(cmd.OutOrStdout())
 			cfg := config.LoadOrEmpty("stackup.yml")
 			o := orchestrator.New(p)
+
+			if onboard.NeedsOnboarding(".env") {
+				ob := onboard.New(cmd.OutOrStdout(), os.Stdin, cfg.Env.Schema)
+				if err := ob.Run(".env", ".env.example"); err != nil {
+					return err
+				}
+			}
 
 			if !o.PreFlight(".env", ".env.example", cfg.Env.Schema) {
 				return fmt.Errorf("pre-flight validation failed")
