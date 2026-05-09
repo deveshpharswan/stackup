@@ -1,36 +1,40 @@
+version: "2"
+
 run:
   timeout: 5m
   modules-download-mode: readonly
 
 linters:
+  default: none
   enable:
     - errcheck
     - govet
     - ineffassign
     - staticcheck
     - unused
-    - gosimple
     - gocritic
-    - gofmt
     - misspell
     - unconvert
     - unparam
     - bodyclose
     - noctx
     - prealloc
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-checks:
+        - hugeParam
+    errcheck:
+      exclude-functions:
+        - (io.Closer).Close
+        - fmt.Fprintf
+        - fmt.Fprintln
 
-linters-settings:
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
-    disabled-checks:
-      - hugeParam
-  errcheck:
-    exclude-functions:
-      - (io.Closer).Close
-      - fmt.Fprintf
-      - fmt.Fprintln
+formatters:
+  enable:
+    - gofmt
 
 issues:
   exclude-rules:
