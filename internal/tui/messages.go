@@ -63,3 +63,7 @@ type ActionResultMsg struct {
 	Text string
 	Err  error
 }
+
+type shellRequestMsg struct {
+	Service string
+}

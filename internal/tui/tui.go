@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -124,6 +126,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ConfirmYesMsg:
 		m.showConfirm = false
+		switch msg.Action {
+		case ConfirmRestart:
+			return m, restartService(msg.Service)
+		case ConfirmDelete:
+			return m, stopService(msg.Service)
+		}
+
+	case ActionResultMsg:
+		if msg.Err != nil {
+			m.toast = m.toast.Show("Error: " + msg.Err.Error())
+		} else {
+			m.toast = m.toast.Show(msg.Text)
+		}
+		return m, m.toast.Tick()
+
+	case shellRequestMsg:
+		return m, shellIntoService(msg.Service)
 
 	case CommandResult:
 		if msg.IsQuit {
@@ -256,4 +275,39 @@ func Run() error {
 	p := tea.NewProgram(NewModel(), tea.WithAltScreen())
 	_, err := p.Run()
 	return err
+}
+
+func restartService(name string) tea.Cmd {
+	return func() tea.Msg {
+		c := exec.Command("docker", "compose", "restart", name)
+		err := c.Run()
+		if err != nil {
+			return ActionResultMsg{Err: fmt.Errorf("restart %s: %w", name, err)}
+		}
+		return ActionResultMsg{Text: fmt.Sprintf("Service %q restarted", name)}
+	}
+}
+
+func stopService(name string) tea.Cmd {
+	return func() tea.Msg {
+		c := exec.Command("docker", "compose", "stop", name)
+		err := c.Run()
+		if err != nil {
+			return ActionResultMsg{Err: fmt.Errorf("stop %s: %w", name, err)}
+		}
+		return ActionResultMsg{Text: fmt.Sprintf("Service %q stopped", name)}
+	}
+}
+
+func shellIntoService(name string) tea.Cmd {
+	c := exec.Command("docker", "compose", "exec", name, "sh")
+	c.Stdin = os.Stdin
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		if err != nil {
+			return ActionResultMsg{Err: fmt.Errorf("shell %s: %w", name, err)}
+		}
+		return ActionResultMsg{Text: fmt.Sprintf("Exited shell for %q", name)}
+	})
 }
