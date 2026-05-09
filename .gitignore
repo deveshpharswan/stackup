@@ -8,3 +8,4 @@ stackup.exe
 !test/e2e/fixtures/.env*
 .superpowers/
 .claude/
+future.md
