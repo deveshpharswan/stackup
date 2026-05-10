@@ -208,12 +208,12 @@ func (p *Printer) SummaryTable(results []ServiceResult, total time.Duration) {
 
 	// Column headers
 	fmt.Fprintf(p.w, "  %s%s%s\n", p.dim.Sprint("├"), p.dim.Sprint(strings.Repeat("─", totalW)), p.dim.Sprint("┤"))
-	fmt.Fprintf(p.w, "  %s %-*s%-*s%-*s%-*s%s\n",
+	fmt.Fprintf(p.w, "  %s %s%s%s%s%s\n",
 		p.dim.Sprint("│"),
-		nameW, p.bold.Sprint("Service"),
-		statusW, p.bold.Sprint("Status"),
-		labelW, p.bold.Sprint("Check"),
-		timeW, p.bold.Sprint("Time"),
+		colorPad(p.bold.Sprint("Service"), "Service", nameW),
+		colorPad(p.bold.Sprint("Status"), "Status", statusW),
+		colorPad(p.bold.Sprint("Check"), "Check", labelW),
+		colorPad(p.bold.Sprint("Time"), "Time", timeW),
 		p.dim.Sprint("│"),
 	)
 	fmt.Fprintf(p.w, "  %s%s%s\n", p.dim.Sprint("├"), p.dim.Sprint(strings.Repeat("─", totalW)), p.dim.Sprint("┤"))
@@ -228,13 +228,13 @@ func (p *Printer) SummaryTable(results []ServiceResult, total time.Duration) {
 			status = "failed"
 			statusColor = p.red.Sprint(status)
 		}
-		_ = status
-		fmt.Fprintf(p.w, "  %s %-*s%-*s%-*s%-*s%s\n",
+		timeStr := formatDuration(r.Elapsed)
+		fmt.Fprintf(p.w, "  %s %-*s%s%s%s%s\n",
 			p.dim.Sprint("│"),
 			nameW, r.Name,
-			statusW, statusColor,
-			labelW, p.dim.Sprint(r.Label),
-			timeW, p.dim.Sprint(formatDuration(r.Elapsed)),
+			colorPad(statusColor, status, statusW),
+			colorPad(p.dim.Sprint(r.Label), r.Label, labelW),
+			colorPad(p.dim.Sprint(timeStr), timeStr, timeW),
 			p.dim.Sprint("│"),
 		)
 	}
@@ -331,4 +331,13 @@ func isTTY(w io.Writer) bool {
 
 func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%.1fs", d.Seconds())
+}
+
+// colorPad applies color to text and right-pads to width using plain text length.
+func colorPad(colored, plain string, width int) string {
+	pad := width - len([]rune(plain))
+	if pad < 0 {
+		pad = 0
+	}
+	return colored + strings.Repeat(" ", pad)
 }
