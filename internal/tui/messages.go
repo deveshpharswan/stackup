@@ -89,6 +89,8 @@ type SidebarSelectionMsg struct {
 	Service string
 }
 
+type uiTickMsg struct{}
+
 // InspectResultMsg carries Docker inspect data for a service.
 type InspectResultMsg struct {
 	Service string

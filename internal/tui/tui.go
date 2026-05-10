@@ -76,6 +76,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.services.Init(),
 		m.graph.Init(), // loads tier data via graphDataMsg
+		uiTick(),
 	)
 }
 
@@ -164,6 +165,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.confirm = m.confirm.Request(ConfirmStackDown, "")
 			m.showConfirm = true
 			return m, nil
+		case "r":
+			if m.activeTab == TabServices {
+				if svc := m.sidebar.Selected(); svc != "" {
+					m.confirm = m.confirm.Request(ConfirmRestart, svc)
+					m.showConfirm = true
+				}
+				return m, nil
+			}
+		case "s":
+			if m.activeTab == TabServices {
+				if svc := m.sidebar.Selected(); svc != "" {
+					m.confirm = m.confirm.Request(ConfirmDelete, svc)
+					m.showConfirm = true
+				}
+				return m, nil
+			}
+		case "u":
+			if m.activeTab == TabServices {
+				if svc := m.sidebar.Selected(); svc != "" {
+					return m, startService(svc)
+				}
+				return m, nil
+			}
+		case "x":
+			if m.activeTab == TabServices {
+				if svc := m.sidebar.Selected(); svc != "" {
+					return m, shellIntoService(svc)
+				}
+				return m, nil
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -303,6 +334,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case startServiceMsg:
 		return m, startService(msg.Service)
 
+	case uiTickMsg:
+		cmds = append(cmds, uiTick())
+
 	case CommandResult:
 		if msg.IsQuit {
 			m.quitting = true
@@ -409,12 +443,12 @@ func (m Model) renderServicesTab(layout PanelLayout) string {
 	var leftPanel string
 	if layout.HasSidebar {
 		leftPanel = lipgloss.NewStyle().
-			Width(layout.SidebarWidth).
+			Width(layout.SidebarWidth-1).
 			Height(contentH).
 			BorderRight(true).
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(colorBorder).
-			Render(m.sidebar.View(layout.SidebarWidth-1, contentH))
+			Render(m.sidebar.View(layout.SidebarWidth-2, contentH))
 	}
 
 	// Right panel (log tail + progress)
@@ -429,18 +463,18 @@ func (m Model) renderServicesTab(layout PanelLayout) string {
 				logHeight = 2
 			}
 		}
-		logContent := m.logTail.View(layout.RightWidth, logHeight)
+		logContent := m.logTail.View(layout.RightWidth-1, logHeight)
 		logHdr := lipgloss.NewStyle().
 			Background(lipgloss.Color("#0f1117")).
 			Foreground(colorBlue).
 			Bold(true).
-			Width(layout.RightWidth).
+			Width(layout.RightWidth-1).
 			Padding(0, 1).
 			Render("Live Logs  " + styleDim.Render(m.sidebar.Selected()))
 		logSection := logHdr + "\n" + logContent
 
 		rightPanel = lipgloss.NewStyle().
-			Width(layout.RightWidth).
+			Width(layout.RightWidth-1).
 			Height(contentH).
 			BorderLeft(true).
 			BorderStyle(lipgloss.NormalBorder()).
@@ -495,6 +529,12 @@ func (m Model) renderFooter() string {
 		}
 	}
 	return styleStatusBar.Width(m.width).Render("  " + strings.Join(parts, styleDim.Render("  ")))
+}
+
+func uiTick() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return uiTickMsg{}
+	})
 }
 
 func fetchInspect(dc *dockerclient.Client, service string) tea.Cmd {
