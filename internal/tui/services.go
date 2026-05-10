@@ -77,30 +77,6 @@ func (m ServicesModel) Update(msg tea.Msg) (ServicesModel, tea.Cmd) {
 			if m.cursor > 0 {
 				m.cursor--
 			}
-		case "r":
-			if svc := m.Selected(); svc != "" {
-				return m, func() tea.Msg {
-					return ConfirmRequestMsg{Action: ConfirmRestart, Service: svc}
-				}
-			}
-		case "s":
-			if svc := m.Selected(); svc != "" {
-				return m, func() tea.Msg {
-					return ConfirmRequestMsg{Action: ConfirmDelete, Service: svc}
-				}
-			}
-		case "x":
-			if svc := m.Selected(); svc != "" {
-				return m, func() tea.Msg {
-					return shellRequestMsg{Service: svc}
-				}
-			}
-		case "u":
-			if svc := m.Selected(); svc != "" {
-				return m, func() tea.Msg {
-					return startServiceMsg{Service: svc}
-				}
-			}
 		}
 	}
 	return m, nil

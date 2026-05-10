@@ -352,6 +352,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	// Always forward service updates to graph so health icons stay current
+	if _, ok := msg.(ServiceUpdateMsg); ok {
+		newGraph, cmd := m.graph.Update(msg)
+		m.graph = newGraph
+		cmds = append(cmds, cmd)
+	}
+
 	// Route key messages and others to active tab
 	switch m.activeTab {
 	case TabServices:
@@ -378,7 +385,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	case TabGraph:
 		switch msg.(type) {
-		case graphDataMsg:
+		case graphDataMsg, ServiceUpdateMsg:
 			// already handled above
 		default:
 			newGraph, cmd := m.graph.Update(msg)
@@ -448,7 +455,7 @@ func (m Model) renderServicesTab(layout PanelLayout) string {
 			BorderRight(true).
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(colorBorder).
-			Render(m.sidebar.View(layout.SidebarWidth-2, contentH))
+			Render(m.sidebar.View(layout.SidebarWidth-1, contentH))
 	}
 
 	// Right panel (log tail + progress)
@@ -512,9 +519,9 @@ func (m Model) renderFooter() string {
 	var hints []string
 	switch m.activeTab {
 	case TabServices:
-		hints = []string{"↑↓:nav", "enter:focus", "1-5:tabs", "r:restart", "s:stop", "u:start", "x:shell", "D:down", "/:filter", "?:help", "q:quit"}
+		hints = []string{"↑↓:nav", "1-5:tabs", "r:restart", "s:stop", "u:start", "x:shell", "D:down", "/:filter", "?:help", "q:quit"}
 	case TabLogs:
-		hints = []string{"↑↓:scroll", "g/G:top/bot", "/:filter", "1-5:tabs", "esc:back"}
+		hints = []string{"↑↓:scroll", "g/G:top/bot", "/:filter", "1-5:tabs", "esc:back", "?:help", "q:quit"}
 	default:
 		hints = []string{"1-5:tabs", "esc:back", "?:help", "q:quit"}
 	}
@@ -648,8 +655,7 @@ func startService(name string) tea.Cmd {
 }
 
 func shellIntoService(name string) tea.Cmd {
-	// Try sh first; if the container has no sh, fall back to bash.
-	c := exec.Command("docker", "compose", "exec", name, "sh", "-c", "sh || bash")
+	c := exec.Command("docker", "compose", "exec", "-it", name, "sh")
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
