@@ -137,7 +137,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "1":
 			m.activeTab = TabServices
 			return m, nil
-		case "2":
+		case "2", "l", "enter":
 			m.activeTab = TabLogs
 			if svc := m.sidebar.Selected(); svc != "" {
 				m.logs = m.logs.Stop()
@@ -516,24 +516,37 @@ func (m Model) renderFooter() string {
 		return styleStatusBar.Width(m.width).Render("  " + msg)
 	}
 
-	var hints []string
+	type hint struct{ key, action string }
+	var hints []hint
 	switch m.activeTab {
 	case TabServices:
-		hints = []string{"↑↓:nav", "1-5:tabs", "r:restart", "s:stop", "u:start", "x:shell", "D:down", "/:filter", "?:help", "q:quit"}
+		hints = []hint{
+			{"↑↓", "nav"}, {"l", "logs"}, {"r", "restart"}, {"s", "stop"},
+			{"u", "start"}, {"x", "shell"}, {"D", "down"},
+			{"", "│"},
+			{"/", "filter"}, {"?", "help"}, {"q", "quit"},
+		}
 	case TabLogs:
-		hints = []string{"↑↓:scroll", "g/G:top/bot", "/:filter", "1-5:tabs", "esc:back", "?:help", "q:quit"}
+		hints = []hint{
+			{"↑↓", "scroll"}, {"g/G", "top/bot"}, {"/", "filter"}, {"esc", "back"},
+			{"", "│"},
+			{"?", "help"}, {"q", "quit"},
+		}
 	default:
-		hints = []string{"1-5:tabs", "esc:back", "?:help", "q:quit"}
+		hints = []hint{
+			{"1-5", "tabs"}, {"esc", "back"},
+			{"", "│"},
+			{"?", "help"}, {"q", "quit"},
+		}
 	}
 
 	var parts []string
 	for _, h := range hints {
-		idx := strings.Index(h, ":")
-		if idx >= 0 {
-			parts = append(parts, styleInfo.Render(h[:idx+1])+styleDim.Render(h[idx+1:]))
-		} else {
-			parts = append(parts, styleDim.Render(h))
+		if h.key == "" {
+			parts = append(parts, styleDim.Render("│"))
+			continue
 		}
+		parts = append(parts, styleInfo.Render(h.key)+styleDim.Render(" "+h.action))
 	}
 	return styleStatusBar.Width(m.width).Render("  " + strings.Join(parts, styleDim.Render("  ")))
 }

@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -11,7 +12,7 @@ import (
 type SidebarModel struct {
 	services []ServiceInfo
 	cursor   int
-	offset   int
+	uptimeAt time.Time // when the last poll arrived; used for live uptime
 }
 
 func NewSidebarModel() SidebarModel {
@@ -60,6 +61,7 @@ func (m SidebarModel) Update(msg tea.Msg) (SidebarModel, tea.Cmd) {
 		if msg.Err == nil {
 			prev := m.Selected()
 			m.services = msg.Services
+			m.uptimeAt = time.Now()
 			// Restore cursor to same service name if possible
 			for i, s := range m.services {
 				if s.Name == prev {
@@ -80,81 +82,148 @@ func (m SidebarModel) View(width, height int) string {
 		return styleDim.Render("  No services")
 	}
 
-	// Scroll window
-	visible := height - 2 // subtract header line
-	if visible < 1 {
-		visible = 1
+	// Compute elapsed time since last poll for live uptime display
+	elapsed := time.Duration(0)
+	if !m.uptimeAt.IsZero() {
+		elapsed = time.Since(m.uptimeAt)
 	}
-	// Adjust offset to keep cursor visible (note: offset is on value receiver so we use local)
-	offset := m.offset
-	if m.cursor < offset {
-		offset = m.cursor
+
+	// Build all logical rows (service rows + tier dividers) so we can scroll them uniformly
+	type sidebarRow struct {
+		text      string
+		svcIndex  int // -1 for dividers
 	}
-	if m.cursor >= offset+visible {
-		offset = m.cursor - visible + 1
+
+	// Row layout: 1(indicator) + 1(dot) + 1(space) + name + 1(space) + uptime(6) = width
+	// uptime column is 6 chars: "59m59s" at most
+	const uptimeCols = 6
+	nameWidth := width - 3 - uptimeCols
+	if nameWidth < 4 {
+		nameWidth = 4
+	}
+
+	var rows []sidebarRow
+	currentTier := -1
+	for i, svc := range m.services {
+		if svc.Tier != currentTier && svc.Tier > 0 {
+			currentTier = svc.Tier
+			label := fmt.Sprintf(" tier %d ", svc.Tier)
+			dashes := width - len(label) - 2
+			if dashes < 1 {
+				dashes = 1
+			}
+			divText := styleDim.Render("──" + label + strings.Repeat("─", dashes))
+			rows = append(rows, sidebarRow{text: divText, svcIndex: -1})
+		}
+
+		liveUptime := svc.Uptime
+		if svc.Uptime > 0 {
+			liveUptime += elapsed
+		}
+		uptimeStr := ""
+		if liveUptime > 0 {
+			uptimeStr = formatUptimeShort(liveUptime)
+		}
+
+		dot, baseStyle := svcDotAndStyle(svc)
+
+		indicator := " "
+		var rowStyle lipgloss.Style
+		if i == m.cursor {
+			indicator = styleHealthy.Render("│")
+			rowStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("#1c2128")).
+				Foreground(colorGreen).
+				Bold(true)
+		} else {
+			rowStyle = baseStyle
+		}
+
+		nameStr := truncate(svc.Name, nameWidth)
+		raw := fmt.Sprintf("%s%s %-*s %-6s", indicator, dot, nameWidth, nameStr, uptimeStr)
+		rows = append(rows, sidebarRow{text: rowStyle.Width(width).Render(raw), svcIndex: i})
+	}
+
+	// Header takes 1 line; remaining is scrollable content
+	contentRows := height - 1
+	if contentRows < 1 {
+		contentRows = 1
+	}
+
+	// Find which row index corresponds to the cursor service
+	cursorRowIdx := 0
+	for ri, r := range rows {
+		if r.svcIndex == m.cursor {
+			cursorRowIdx = ri
+			break
+		}
+	}
+
+	// Scroll offset to keep cursor visible
+	offset := 0
+	if cursorRowIdx >= contentRows {
+		offset = cursorRowIdx - contentRows + 1
 	}
 
 	var b strings.Builder
-	// Panel header
+
+	// Header
 	b.WriteString(lipgloss.NewStyle().
 		Background(lipgloss.Color("#0f1117")).
 		Foreground(colorBlue).
 		Bold(true).
 		Width(width).
-		Padding(0, 1).
-		Render(fmt.Sprintf("Services  %d/%d", len(m.services), len(m.services))) + "\n")
+		Render(fmt.Sprintf(" SERVICES  %d", len(m.services))) + "\n")
 
-	currentTier := -1
-	rendered := 0
-	for i, svc := range m.services {
-		// Tier divider
-		if svc.Tier != currentTier && svc.Tier > 0 {
-			currentTier = svc.Tier
-			divider := styleDim.Width(width).Render(fmt.Sprintf(" tier %d ", svc.Tier))
-			b.WriteString(divider + "\n")
-		}
-		if i < offset || rendered >= visible {
+	// Render visible rows
+	shown := 0
+	for ri, r := range rows {
+		if ri < offset {
 			continue
 		}
-		rendered++
-
-		dot, nameStyle, uptimeStr := svcStatusParts(svc)
-		name := nameStyle.Render(truncate(svc.Name, width-10))
-		uptime := styleDim.Render(truncate(uptimeStr, 7))
-
-		row := fmt.Sprintf(" %s %-*s %s", dot, width-12, name, uptime)
-
-		if i == m.cursor {
-			b.WriteString(lipgloss.NewStyle().
-				Background(lipgloss.Color("#161b22")).
-				BorderLeft(true).
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(colorGreen).
-				Width(width).
-				Render(row) + "\n")
-		} else {
-			b.WriteString(lipgloss.NewStyle().Width(width).Render(row) + "\n")
+		if shown >= contentRows {
+			break
 		}
+		b.WriteString(r.text + "\n")
+		shown++
 	}
+
 	return b.String()
 }
 
-// svcStatusParts returns dot symbol, name style, and uptime string for a service.
-func svcStatusParts(svc ServiceInfo) (string, lipgloss.Style, string) {
-	uptime := ""
-	if svc.Uptime > 0 {
-		uptime = formatUptime(svc.Uptime)
-	}
+// svcDotAndStyle returns the dot symbol and base text style for a service.
+func svcDotAndStyle(svc ServiceInfo) (string, lipgloss.Style) {
 	switch {
 	case svc.State == "running" && svc.Health == "healthy":
-		return styleHealthy.Render("●"), styleHealthy, uptime
+		return styleHealthy.Render("●"), styleHealthy
 	case svc.State == "running":
-		return styleWarning.Render("◐"), styleWarning, uptime
+		return styleWarning.Render("◐"), styleWarning
 	case svc.State == "exited" || svc.State == "restarting":
-		return styleFailed.Render("✗"), styleFailed, uptime
+		return styleFailed.Render("✗"), styleFailed
 	default:
-		return styleDim.Render("◌"), styleDim, uptime
+		return styleDim.Render("◌"), styleDim
 	}
+}
+
+// svcStatusParts is kept for compatibility with describe.go and other callers.
+func svcStatusParts(svc ServiceInfo) (string, lipgloss.Style, string) {
+	dot, style := svcDotAndStyle(svc)
+	uptime := ""
+	if svc.Uptime > 0 {
+		uptime = formatUptimeShort(svc.Uptime)
+	}
+	return dot, style, uptime
+}
+
+// formatUptimeShort formats a duration compactly for the sidebar (e.g. "2m34s", "1h02m").
+func formatUptimeShort(d time.Duration) string {
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh%02dm", h, m)
+	}
+	return fmt.Sprintf("%dm%02ds", m, s)
 }
 
 func truncate(s string, n int) string {
