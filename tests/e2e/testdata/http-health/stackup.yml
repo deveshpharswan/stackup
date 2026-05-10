@@ -1,0 +1,8 @@
+version: "1"
+services:
+  web:
+    health:
+      type: http
+      url: http://localhost:18081/
+      timeout: 30s
+      interval: 1s

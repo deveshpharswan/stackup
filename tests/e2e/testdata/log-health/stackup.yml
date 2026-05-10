@@ -1,0 +1,8 @@
+version: "1"
+services:
+  web:
+    health:
+      type: log
+      pattern: "ready for start up"
+      timeout: 30s
+      interval: 1s

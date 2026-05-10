@@ -1,0 +1,9 @@
+version: "1"
+services:
+  cache:
+    health:
+      type: tcp
+      host: localhost
+      port: 16380
+      timeout: 30s
+      interval: 1s

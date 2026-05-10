@@ -1,0 +1,11 @@
+services:
+  cache:
+    image: redis:7-alpine
+    ports:
+      - "16379:6379"
+  web:
+    image: nginx:alpine
+    ports:
+      - "18080:80"
+    depends_on:
+      - cache

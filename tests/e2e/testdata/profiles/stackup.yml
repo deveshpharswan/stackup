@@ -1,0 +1,22 @@
+version: "1"
+profiles:
+  backend:
+    services:
+      - cache
+  frontend:
+    services:
+      - web
+services:
+  cache:
+    health:
+      type: tcp
+      host: localhost
+      port: 16382
+      timeout: 30s
+      interval: 1s
+  web:
+    health:
+      type: http
+      url: http://localhost:18084/
+      timeout: 30s
+      interval: 1s
