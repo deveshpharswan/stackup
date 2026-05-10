@@ -130,7 +130,7 @@ func (m SidebarModel) View(width, height int) string {
 		Bold(true).
 		Width(width).
 		Padding(0, 1).
-		Render(fmt.Sprintf("Services  %d/%d", len(m.services), len(m.services))) + "\n")
+		Render(fmt.Sprintf("Services  %d/%d", m.cursor+1, len(m.services))) + "\n")
 
 	currentTier := -1
 	rendered := 0

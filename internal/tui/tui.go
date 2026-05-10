@@ -197,6 +197,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "q":
 			if m.activeView == ViewServices {
+				m.logTail.Stop()
 				m.quitting = true
 				return m, tea.Quit
 			}
@@ -327,10 +328,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case uiTickMsg:
 		m.sidebar = m.sidebar.UpdateUptimes(m.startedAt)
 		m.services = m.services.UpdateUptimes(m.startedAt)
-		if m.detail.service != nil {
-			if t, ok := m.startedAt[m.detail.service.Name]; ok {
-				m.detail.service.Uptime = time.Since(t)
-			}
+		// Refresh detail from the now-uptime-updated sidebar so the display stays live.
+		if svc := m.sidebar.SelectedInfo(); svc != nil {
+			m.detail = m.updateDetail(svc)
 		}
 		cmds = append(cmds, uiTick())
 
@@ -393,6 +393,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case CommandResult:
 		if msg.IsQuit {
+			m.logTail.Stop()
 			m.quitting = true
 			return m, tea.Quit
 		}

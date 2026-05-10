@@ -125,6 +125,41 @@ func TestModel_SelectedServiceWide(t *testing.T) {
 	assert.Equal(t, "web", m.selectedService())
 }
 
+func TestDetailModel_NilService(t *testing.T) {
+	d := NewDetailModel()
+	view := d.View(80, 30, "")
+	assert.Contains(t, view, "Select a service")
+}
+
+func TestDetailModel_WithService(t *testing.T) {
+	d := NewDetailModel()
+	svc := ServiceInfo{Name: "web", State: "running", Health: "healthy"}
+	d = d.SetService(&svc, nil)
+	view := d.View(80, 30, "")
+	assert.Contains(t, view, "web")
+	assert.Contains(t, view, "Logs")
+}
+
+func TestDetailModel_WithStats(t *testing.T) {
+	d := NewDetailModel()
+	svc := ServiceInfo{Name: "api", State: "running", Health: "healthy", CPU: 12.5, Memory: 40.0}
+	history := map[string]*StatsHistory{
+		"api": {cpu: []float64{10, 11, 12}, mem: []float64{38, 39, 40}},
+	}
+	d = d.SetService(&svc, history)
+	view := d.View(80, 30, "some log line")
+	assert.Contains(t, view, "api")
+	assert.Contains(t, view, "some log line")
+}
+
+func TestDetailModel_WithLogTail(t *testing.T) {
+	d := NewDetailModel()
+	svc := ServiceInfo{Name: "db", State: "running"}
+	d = d.SetService(&svc, nil)
+	view := d.View(80, 30, "line1\nline2\nline3")
+	assert.Contains(t, view, "line1")
+}
+
 func TestComputeLayout_Narrow(t *testing.T) {
 	l := ComputeLayout(80, 24)
 	assert.False(t, l.HasSidebar)
