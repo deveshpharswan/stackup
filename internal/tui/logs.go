@@ -27,7 +27,6 @@ func NewLogsModel() LogsModel {
 }
 
 func (m LogsModel) Start(service string, width, height int) (LogsModel, tea.Cmd) {
-	m.Stop()
 	vp := viewport.New(width, height)
 	vp.SetContent("")
 	m.service = service
@@ -46,7 +45,14 @@ func (m LogsModel) Start(service string, width, height int) (LogsModel, tea.Cmd)
 func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case LogLineMsg:
-		m.lines = append(m.lines, msg.Line)
+		line := msg.Line
+		if strings.HasPrefix(line, "\x00ERR:") {
+			errText := strings.TrimPrefix(line, "\x00ERR:")
+			m.lines = append(m.lines, styleFailed.Render("Stream error: "+errText))
+			m.viewport.SetContent(m.renderLines())
+			return m, nil
+		}
+		m.lines = append(m.lines, line)
 		if len(m.lines) > 1000 {
 			m.lines = m.lines[len(m.lines)-1000:]
 		}
@@ -112,9 +118,17 @@ func startLogStream(ctx context.Context, service string) <-chan string {
 		c := exec.CommandContext(ctx, "docker", "compose", "logs", "-f", "--tail", "100", "--timestamps", service)
 		stdout, err := c.StdoutPipe()
 		if err != nil {
+			select {
+			case <-ctx.Done():
+			case ch <- "\x00ERR:" + err.Error():
+			}
 			return
 		}
 		if err := c.Start(); err != nil {
+			select {
+			case <-ctx.Done():
+			case ch <- "\x00ERR:" + err.Error():
+			}
 			return
 		}
 		scanner := bufio.NewScanner(stdout)

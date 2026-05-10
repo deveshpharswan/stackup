@@ -121,6 +121,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "l":
 			if m.activeView == ViewServices {
 				if svc := m.services.Selected(); svc != "" {
+					m.logs.Stop()
 					m = m.pushView(ViewLogs)
 					newLogs, cmd := m.logs.Start(svc, m.width, m.height-7)
 					m.logs = newLogs
@@ -198,6 +199,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		if msg.View == ViewLogs && msg.Arg != "" {
+			m.logs.Stop()
 			m = m.pushView(ViewLogs)
 			newLogs, cmd := m.logs.Start(msg.Arg, m.width, m.height-7)
 			m.logs = newLogs
