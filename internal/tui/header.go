@@ -8,7 +8,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/deveshpharswan/stackup/internal/constants"
 )
 
@@ -18,6 +17,7 @@ type HeaderModel struct {
 	tiers     int
 	healthy   int
 	total     int
+	failed    int
 	startTime time.Time
 }
 
@@ -40,13 +40,17 @@ func (m HeaderModel) Update(msg tea.Msg) (HeaderModel, tea.Cmd) {
 	case ServiceUpdateMsg:
 		if msg.Err == nil {
 			m.total = len(msg.Services)
-			healthy := 0
+			healthy, failed := 0, 0
 			for _, s := range msg.Services {
-				if s.Health == "healthy" {
+				switch {
+				case s.Health == "healthy":
 					healthy++
+				case s.State == "exited" || s.State == "restarting":
+					failed++
 				}
 			}
 			m.healthy = healthy
+			m.failed = failed
 		}
 	case graphDataMsg:
 		if msg.err == nil {
@@ -56,74 +60,48 @@ func (m HeaderModel) Update(msg tea.Msg) (HeaderModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m HeaderModel) View(width int, active ViewType) string {
-	uptime := time.Since(m.startTime).Truncate(time.Second)
-
-	healthStr := fmt.Sprintf("%d/%d", m.healthy, m.total)
-	if m.healthy == m.total && m.total > 0 {
-		healthStr = styleHealthy.Render(healthStr + " ✓")
-	} else {
-		healthStr = styleWarning.Render(healthStr)
+func tierStr(n int) string {
+	if n == 0 {
+		return "—"
 	}
-
-	tierStr := "—"
-	if m.tiers > 0 {
-		tierStr = fmt.Sprintf("%d", m.tiers)
-	}
-
-	left := strings.Join([]string{
-		styleHealthy.Render("Stack:") + "   " + m.stack,
-		styleHealthy.Render("Compose:") + " " + m.compose,
-		styleHealthy.Render("Tiers:") + "   " + tierStr,
-		styleHealthy.Render("Health:") + "  " + healthStr,
-		styleHealthy.Render("Uptime:") + "  " + formatUptime(uptime),
-	}, "\n")
-
-	shortcuts := shortcutsForView(active)
-
-	logo := styleDim.Render("╔═══════╗\n║STACKUP║\n╚═══════╝")
-
-	leftCol := lipgloss.NewStyle().Width(22).Render(left)
-	midCol := lipgloss.NewStyle().Width(width - 22 - 14).Render(shortcuts)
-	rightCol := lipgloss.NewStyle().Width(12).Align(lipgloss.Right).Render(logo)
-
-	row := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, midCol, rightCol)
-	return styleHeader.Width(width).Render(row)
+	return fmt.Sprintf("%d", n)
 }
 
-func shortcutsForView(v ViewType) string {
-	switch v {
-	case ViewServices:
-		return strings.Join([]string{
-			styleInfo.Render("<?>") + " Help     " + styleInfo.Render("<r>") + " Restart",
-			styleInfo.Render("<l>") + " Logs     " + styleInfo.Render("<s>") + " Shell",
-			styleInfo.Render("<d>") + " Doctor   " + styleInfo.Render("<x>") + " Stop",
-			styleInfo.Render("<g>") + " Graph    " + styleInfo.Render("<e>") + " Err zoom",
-			styleInfo.Render("<:>") + " Command  " + styleInfo.Render("<q>") + " Quit",
-		}, "\n")
-	case ViewLogs:
-		return strings.Join([]string{
-			styleInfo.Render("<esc>") + " Back   " + styleInfo.Render("<t>") + " Timestamps",
-			styleInfo.Render("<w>") + " Wrap     " + styleInfo.Render("</>") + " Search",
-			styleInfo.Render("<c>") + " Clear    " + styleInfo.Render("<G>") + " Bottom",
-		}, "\n")
-	case ViewDoctor:
-		return strings.Join([]string{
-			styleInfo.Render("<esc>") + " Back     " + styleInfo.Render("<enter>") + " Details",
-			styleInfo.Render("<R>") + " Re-scan",
-		}, "\n")
-	case ViewGraph:
-		return strings.Join([]string{
-			styleInfo.Render("<esc>") + " Back     " + styleInfo.Render("<1-9>") + " Focus tier",
-			styleInfo.Render("<enter>") + " Select",
-		}, "\n")
-	case ViewDescribe:
-		return strings.Join([]string{
-			styleInfo.Render("<esc>") + " Back   " + styleInfo.Render("<l>") + " Logs",
-			styleInfo.Render("<r>") + " Restart",
-		}, "\n")
+func (m HeaderModel) View(width int, active TabType) string {
+	uptime := time.Since(m.startTime).Truncate(time.Second)
+
+	logo := styleInfo.Bold(true).Render("STACKUP")
+	sep := styleDim.Render(" │ ")
+	project := styleBold.Render(m.stack)
+
+	var badges []string
+	starting := m.total - m.healthy - m.failed
+	// Show worst state first for quick visual scanning
+	if m.failed > 0 {
+		badges = append(badges, styleFailed.Render(fmt.Sprintf("✗ %d failed", m.failed)))
 	}
-	return ""
+	if starting > 0 {
+		badges = append(badges, styleWarning.Render(fmt.Sprintf("◐ %d starting", starting)))
+	}
+	if m.healthy > 0 {
+		badges = append(badges, styleHealthy.Render(fmt.Sprintf("● %d healthy", m.healthy)))
+	}
+
+	meta := styleDim.Render(fmt.Sprintf("%s  tiers:%s  uptime:%s",
+		m.compose, tierStr(m.tiers), formatUptime(uptime)))
+
+	left := logo + sep + project
+	if len(badges) > 0 {
+		left += sep + strings.Join(badges, "  ")
+	}
+	left += sep + meta
+
+	// Truncate if needed to fit within terminal width
+	if len(left) > width-2 {
+		left = left[:width-3] + "…"
+	}
+
+	return styleHeader.Width(width).Render(left)
 }
 
 func formatUptime(d time.Duration) string {
