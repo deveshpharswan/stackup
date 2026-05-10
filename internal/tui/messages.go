@@ -78,3 +78,7 @@ type ActionResultMsg struct {
 type shellRequestMsg struct {
 	Service string
 }
+
+type SidebarSelectionMsg struct {
+	Service string
+}
