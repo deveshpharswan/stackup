@@ -7,6 +7,8 @@
 set -euo pipefail
 
 STACKUP="${1:-./stackup}"
+# Resolve to absolute path so it survives cd into temp dirs
+[[ "$STACKUP" != /* ]] && STACKUP="$PWD/$STACKUP"
 PASS=0
 FAIL=0
 FAILED_TESTS=()
