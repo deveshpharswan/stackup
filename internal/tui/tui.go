@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -27,7 +28,12 @@ type Model struct {
 	activeView ViewType
 	viewStack  []ViewType
 
-	services ServicesModel
+	services     ServicesModel
+	sidebar      SidebarModel
+	detail       DetailModel
+	logTail      LogsModel
+	statsHistory map[string]*StatsHistory
+
 	logs     LogsModel
 	doctor   DoctorViewModel
 	graph    GraphModel
@@ -47,23 +53,40 @@ type Model struct {
 
 func NewModel(dc *dockerclient.Client) Model {
 	return Model{
-		activeView: ViewServices,
-		viewStack:  []ViewType{ViewServices},
-		services:   NewServicesModel(dc),
-		logs:       NewLogsModel(),
-		doctor:     NewDoctorViewModel(),
-		graph:      NewGraphModel(),
-		describe:   NewDescribeModel(),
-		header:     NewHeaderModel(),
-		command:    NewCommandModel(),
-		toast:      NewToastModel(),
-		help:       NewHelpModel(),
-		confirm:    NewConfirmModel(),
+		activeView:   ViewServices,
+		viewStack:    []ViewType{ViewServices},
+		services:     NewServicesModel(dc),
+		sidebar:      NewSidebarModel(),
+		detail:       NewDetailModel(),
+		logTail:      NewLogsModel(),
+		statsHistory: make(map[string]*StatsHistory),
+		logs:         NewLogsModel(),
+		doctor:       NewDoctorViewModel(),
+		graph:        NewGraphModel(),
+		describe:     NewDescribeModel(),
+		header:       NewHeaderModel(),
+		command:      NewCommandModel(),
+		toast:        NewToastModel(),
+		help:         NewHelpModel(),
+		confirm:      NewConfirmModel(),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.services.Init()
+	return tea.Batch(m.services.Init(), m.graph.Init())
+}
+
+func (m Model) isWide() bool {
+	return m.width >= minWidthWide
+}
+
+// selectedService returns the name of the currently selected service,
+// using sidebar in wide mode or services model in narrow mode.
+func (m Model) selectedService() string {
+	if m.isWide() {
+		return m.sidebar.Selected()
+	}
+	return m.services.Selected()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -121,10 +144,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "l":
 			if m.activeView == ViewServices {
-				if svc := m.services.Selected(); svc != "" {
+				if svc := m.selectedService(); svc != "" {
 					m.logs.Stop()
 					m = m.pushView(ViewLogs)
-					newLogs, cmd := m.logs.Start(svc, m.width, m.height-7)
+					newLogs, cmd := m.logs.Start(svc, m.width, m.height-headerLines-footerLines)
 					m.logs = newLogs
 					return m, cmd
 				}
@@ -141,11 +164,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if m.activeView == ViewServices {
-				if svc := m.services.Selected(); svc != "" {
-					m = m.pushView(ViewDescribe)
-					newDesc, cmd := m.describe.Start(svc, m.services.Services(), m.width, m.height-7)
-					m.describe = newDesc
+				if svc := m.selectedService(); svc != "" {
+					m.logs.Stop()
+					m = m.pushView(ViewLogs)
+					newLogs, cmd := m.logs.Start(svc, m.width, m.height-headerLines-footerLines)
+					m.logs = newLogs
 					return m, cmd
+				}
+			}
+		case "j", "down":
+			if m.activeView == ViewServices && m.isWide() {
+				newSidebar, cmd := m.sidebar.Update(msg)
+				m.sidebar = newSidebar
+				cmds = append(cmds, cmd)
+				return m, tea.Batch(cmds...)
+			}
+		case "k", "up":
+			if m.activeView == ViewServices && m.isWide() {
+				newSidebar, cmd := m.sidebar.Update(msg)
+				m.sidebar = newSidebar
+				cmds = append(cmds, cmd)
+				return m, tea.Batch(cmds...)
+			}
+		case "r":
+			if m.activeView == ViewServices {
+				if svc := m.selectedService(); svc != "" {
+					return m, func() tea.Msg {
+						return ConfirmRequestMsg{Action: ConfirmRestart, Service: svc}
+					}
+				}
+			}
+		case "s":
+			if m.activeView == ViewServices {
+				if svc := m.selectedService(); svc != "" {
+					return m, func() tea.Msg {
+						return shellRequestMsg{Service: svc}
+					}
+				}
+			}
+		case "x":
+			if m.activeView == ViewServices {
+				if svc := m.selectedService(); svc != "" {
+					return m, func() tea.Msg {
+						return ConfirmRequestMsg{Action: ConfirmDelete, Service: svc}
+					}
 				}
 			}
 		}
@@ -161,6 +223,61 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				names[i] = s.Name
 			}
 			m.command.SetServiceNames(names)
+			// Forward to sidebar
+			newSidebar, cmd := m.sidebar.Update(msg)
+			m.sidebar = newSidebar
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+
+	case StatsUpdateMsg:
+		if msg.Stats != nil {
+			for name, s := range msg.Stats {
+				h, ok := m.statsHistory[name]
+				if !ok {
+					h = &StatsHistory{}
+					m.statsHistory[name] = h
+				}
+				h.Push(s.CPU, s.Memory)
+			}
+			// Update detail panel with latest stats
+			if svc := m.sidebar.SelectedInfo(); svc != nil {
+				m.detail = m.detail.SetService(svc, m.statsHistory)
+			}
+		}
+
+	case SidebarSelectionMsg:
+		// Stop old log tail and start new one for selected service
+		m.logTail.Stop()
+		layout := ComputeLayout(m.width, m.height)
+		logHeight := layout.ContentHeight / 2
+		if logHeight < 5 {
+			logHeight = 5
+		}
+		newLogTail, cmd := m.logTail.Start(msg.Service, layout.DetailWidth, logHeight)
+		m.logTail = newLogTail
+		cmds = append(cmds, cmd)
+		// Update detail model
+		if svc := m.sidebar.SelectedInfo(); svc != nil {
+			m.detail = m.detail.SetService(svc, m.statsHistory)
+		}
+
+	case graphDataMsg:
+		if msg.err == nil && len(msg.tiers) > 0 {
+			tierMap := make(map[string]int)
+			for i, tier := range msg.tiers {
+				for _, name := range tier {
+					tierMap[name] = i + 1
+				}
+			}
+			// Stamp tiers onto sidebar services
+			svcs := make([]ServiceInfo, len(m.sidebar.services))
+			copy(svcs, m.sidebar.services)
+			for i, s := range svcs {
+				svcs[i].Tier = tierMap[s.Name]
+			}
+			m.sidebar = m.sidebar.SetServices(svcs)
 		}
 
 	case ToastMsg:
@@ -202,7 +319,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.View == ViewLogs && msg.Arg != "" {
 			m.logs.Stop()
 			m = m.pushView(ViewLogs)
-			newLogs, cmd := m.logs.Start(msg.Arg, m.width, m.height-7)
+			newLogs, cmd := m.logs.Start(msg.Arg, m.width, m.height-headerLines-footerLines)
 			m.logs = newLogs
 			return m, cmd
 		}
@@ -216,13 +333,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.View == ViewDescribe && msg.Arg != "" {
 			m = m.pushView(ViewDescribe)
-			newDesc, cmd := m.describe.Start(msg.Arg, m.services.Services(), m.width, m.height-7)
+			newDesc, cmd := m.describe.Start(msg.Arg, m.services.Services(), m.width, m.height-headerLines-footerLines)
 			m.describe = newDesc
 			return m, cmd
 		}
 		m = m.pushView(msg.View)
 	}
 
+	// Forward tick/polling messages to services model (data source)
 	switch msg.(type) {
 	case TickMsg, ServiceUpdateMsg, StatsUpdateMsg, statsTickMsg:
 		newSvc, cmd := m.services.Update(msg)
@@ -230,14 +348,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	// Forward messages to active view
 	switch m.activeView {
 	case ViewServices:
 		switch msg.(type) {
 		case TickMsg, ServiceUpdateMsg, StatsUpdateMsg, statsTickMsg:
+			// Already forwarded above
 		default:
-			newSvc, cmd := m.services.Update(msg)
-			m.services = newSvc
-			cmds = append(cmds, cmd)
+			if !m.isWide() {
+				// Narrow mode: services model handles its own keys
+				newSvc, cmd := m.services.Update(msg)
+				m.services = newSvc
+				cmds = append(cmds, cmd)
+			}
 		}
 	case ViewLogs:
 		newLogs, cmd := m.logs.Update(msg)
@@ -257,6 +380,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	// Forward log tail messages (always, for live updates)
+	switch msg.(type) {
+	case LogLineMsg, LogErrMsg:
+		if m.activeView == ViewServices {
+			newLogTail, cmd := m.logTail.Update(msg)
+			m.logTail = newLogTail
+			cmds = append(cmds, cmd)
+		}
+	}
+
 	newHeader, cmd := m.header.Update(msg)
 	m.header = newHeader
 	cmds = append(cmds, cmd)
@@ -268,33 +401,36 @@ func (m Model) View() string {
 	if m.quitting {
 		return ""
 	}
-	if m.width < 80 || m.height < 24 {
+	if m.width < minWidth || m.height < minHeight {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
 			styleBold.Render("Terminal too small")+"\n"+
-				styleDim.Render(fmt.Sprintf("Need 80x24, got %dx%d", m.width, m.height)))
+				styleDim.Render(fmt.Sprintf("Need %dx%d, got %dx%d", minWidth, minHeight, m.width, m.height)))
 	}
 
-	contentHeight := m.height - 7
+	layout := ComputeLayout(m.width, m.height)
 
 	var content string
 	switch m.activeView {
 	case ViewServices:
-		content = m.services.View(m.width, contentHeight)
+		if m.isWide() {
+			content = m.renderTwoPanel(layout)
+		} else {
+			content = m.services.View(m.width, layout.ContentHeight)
+		}
 	case ViewLogs:
-		content = m.logs.View(m.width, contentHeight)
+		content = m.logs.View(m.width, layout.ContentHeight)
 	case ViewDoctor:
-		content = m.doctor.View(m.width, contentHeight)
+		content = m.doctor.View(m.width, layout.ContentHeight)
 	case ViewGraph:
-		content = m.graph.View(m.width, contentHeight)
+		content = m.graph.View(m.width, layout.ContentHeight)
 	case ViewDescribe:
-		content = m.describe.View(m.width, contentHeight)
+		content = m.describe.View(m.width, layout.ContentHeight)
 	}
 
 	view := lipgloss.JoinVertical(lipgloss.Left,
 		m.header.View(m.width, m.activeView),
-		m.titleBar(),
 		content,
-		m.statusBar(),
+		m.footer(),
 	)
 
 	if m.showHelp {
@@ -308,6 +444,62 @@ func (m Model) View() string {
 	return view
 }
 
+func (m Model) renderTwoPanel(layout PanelLayout) string {
+	leftContent := m.sidebar.View(layout.SidebarWidth-1, layout.ContentHeight)
+	leftPanel := lipgloss.NewStyle().
+		Width(layout.SidebarWidth).
+		Height(layout.ContentHeight).
+		BorderRight(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(colorBorder).
+		Render(leftContent)
+
+	logTailStr := m.logTail.View(layout.DetailWidth-2, layout.ContentHeight/2)
+	rightContent := m.detail.View(layout.DetailWidth-2, layout.ContentHeight, logTailStr)
+	rightPanel := lipgloss.NewStyle().
+		Width(layout.DetailWidth).
+		Height(layout.ContentHeight).
+		PaddingLeft(1).
+		Render(rightContent)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
+}
+
+func (m Model) footer() string {
+	if m.command.Active() {
+		return m.command.View(m.width)
+	}
+	if msg := m.toast.Message(); msg != "" {
+		return styleStatusBar.Width(m.width).Render("  " + msg)
+	}
+
+	var hints []string
+	switch m.activeView {
+	case ViewServices:
+		hints = []string{"j/k:nav", "enter/l:logs", "r:restart", "s:shell", "x:stop", "e:errors", "d:doctor", "g:graph", "/:filter", "?:help", "q:quit"}
+	case ViewLogs:
+		hints = []string{"↑↓:scroll", "g/G:top/bot", "t:timestamps", "w:wrap", "c:clear", "esc:back"}
+	case ViewDoctor:
+		hints = []string{"j/k:nav", "enter:expand", "R:rescan", "esc:back"}
+	case ViewGraph:
+		hints = []string{"1-9:focus tier", "0:all", "esc:back"}
+	case ViewDescribe:
+		hints = []string{"↑↓:scroll", "esc:back"}
+	}
+
+	var parts []string
+	for _, h := range hints {
+		idx := strings.Index(h, ":")
+		if idx >= 0 {
+			parts = append(parts, styleInfo.Render(h[:idx])+styleDim.Render(h[idx:]))
+		} else {
+			parts = append(parts, styleDim.Render(h))
+		}
+	}
+	return styleStatusBar.Width(m.width).Render("  " + strings.Join(parts, "  "))
+}
+
+// titleBar kept for narrow-mode compatibility (not rendered in wide mode)
 func (m Model) titleBar() string {
 	var title string
 	switch m.activeView {

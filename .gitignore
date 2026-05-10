@@ -2,6 +2,7 @@ stackup
 stackup.exe
 *.exe
 .gotmp/
+.gocache/
 *.env
 .env
 !testdata/.env*
@@ -11,3 +12,4 @@ stackup.exe
 future.md
 competitors.md
 test.md
+rules.md

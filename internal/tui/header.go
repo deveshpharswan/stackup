@@ -67,7 +67,7 @@ func tierStr(n int) string {
 	return fmt.Sprintf("%d", n)
 }
 
-func (m HeaderModel) View(width int, active TabType) string {
+func (m HeaderModel) View(width int, active ViewType) string {
 	uptime := time.Since(m.startTime).Truncate(time.Second)
 
 	logo := styleInfo.Bold(true).Render("STACKUP")

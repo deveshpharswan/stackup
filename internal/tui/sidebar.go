@@ -70,6 +70,10 @@ func (m SidebarModel) Update(msg tea.Msg) (SidebarModel, tea.Cmd) {
 			if m.cursor >= len(m.services) && len(m.services) > 0 {
 				m.cursor = len(m.services) - 1
 			}
+			// Emit initial selection so detail panel populates on startup
+			if prev == "" && len(m.services) > 0 {
+				return m, func() tea.Msg { return SidebarSelectionMsg{Service: m.Selected()} }
+			}
 		}
 	}
 	return m, nil

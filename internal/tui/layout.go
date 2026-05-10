@@ -1,33 +1,25 @@
 package tui
 
 const (
-	headerLines  = 2  // slim header (1) + tab bar (1)
+	headerLines  = 1  // slim header
 	footerLines  = 1  // footer hint bar
-	sidebarWidth = 22 // chars, fixed
-	rightWidth   = 36 // chars, fixed
+	sidebarWidth = 24 // left panel, fixed
+	minWidthWide = 100
 	minWidth     = 80
 	minHeight    = 24
 )
 
-// PanelLayout holds the computed dimensions for all panels.
 type PanelLayout struct {
 	Width  int
 	Height int
 
-	HeaderHeight  int
-	FooterHeight  int
-	ContentHeight int // Height - HeaderHeight - FooterHeight
+	ContentHeight int // Height - headerLines - footerLines
 
 	HasSidebar   bool
 	SidebarWidth int
-
-	HasRight   bool
-	RightWidth int
-
-	CenterWidth int // Width - SidebarWidth (if shown) - RightWidth (if shown)
+	DetailWidth  int // Width - SidebarWidth (when sidebar shown)
 }
 
-// ComputeLayout returns panel dimensions for a given terminal size.
 func ComputeLayout(width, height int) PanelLayout {
 	if width < 0 {
 		width = 0
@@ -38,33 +30,20 @@ func ComputeLayout(width, height int) PanelLayout {
 	l := PanelLayout{
 		Width:         width,
 		Height:        height,
-		HeaderHeight:  headerLines,
-		FooterHeight:  footerLines,
 		ContentHeight: height - headerLines - footerLines,
 	}
 	if l.ContentHeight < 0 {
 		l.ContentHeight = 0
 	}
-	// Sidebar visible when terminal is wide enough
-	if width >= 100 {
+	if width >= minWidthWide {
 		l.HasSidebar = true
 		l.SidebarWidth = sidebarWidth
-	}
-	// Right panel visible when terminal is wide enough
-	if width >= 140 {
-		l.HasRight = true
-		l.RightWidth = rightWidth
-	}
-	used := 0
-	if l.HasSidebar {
-		used += l.SidebarWidth
-	}
-	if l.HasRight {
-		used += l.RightWidth
-	}
-	l.CenterWidth = width - used
-	if l.CenterWidth < 20 {
-		l.CenterWidth = 20
+		l.DetailWidth = width - sidebarWidth
+		if l.DetailWidth < 30 {
+			l.DetailWidth = 30
+		}
+	} else {
+		l.DetailWidth = width
 	}
 	return l
 }

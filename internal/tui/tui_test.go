@@ -60,3 +60,82 @@ func TestModel_HelpToggle(t *testing.T) {
 	model = newModel.(Model)
 	assert.False(t, model.showHelp)
 }
+
+func TestModel_IsWide(t *testing.T) {
+	m := NewModel(nil)
+	m.width = 80
+	assert.False(t, m.isWide())
+	m.width = 100
+	assert.True(t, m.isWide())
+	m.width = 120
+	assert.True(t, m.isWide())
+}
+
+func TestModel_TwoPanelRenderNoPanic(t *testing.T) {
+	m := NewModel(nil)
+	m.width = 120
+	m.height = 30
+	// Should not panic with no services loaded
+	view := m.View()
+	assert.NotEmpty(t, view)
+	assert.NotContains(t, view, "Terminal too small")
+}
+
+func TestModel_NarrowFallback(t *testing.T) {
+	m := NewModel(nil)
+	m.width = 90
+	m.height = 30
+	// Narrow mode should render without panic
+	view := m.View()
+	assert.NotEmpty(t, view)
+}
+
+func TestModel_SidebarNavInWideMode(t *testing.T) {
+	m := NewModel(nil)
+	m.width = 120
+	m.height = 30
+	// Load some services into sidebar
+	m.sidebar = m.sidebar.SetServices([]ServiceInfo{
+		{Name: "db", State: "running", Health: "healthy"},
+		{Name: "api", State: "running", Health: "healthy"},
+	})
+	assert.Equal(t, "db", m.sidebar.Selected())
+
+	// Press j to move cursor down
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	model := newModel.(Model)
+	assert.Equal(t, "api", model.sidebar.Selected())
+}
+
+func TestModel_SelectedServiceNarrow(t *testing.T) {
+	m := NewModel(nil)
+	m.width = 80
+	m.height = 30
+	// In narrow mode, selectedService uses services model
+	assert.Equal(t, "", m.selectedService())
+}
+
+func TestModel_SelectedServiceWide(t *testing.T) {
+	m := NewModel(nil)
+	m.width = 120
+	m.height = 30
+	m.sidebar = m.sidebar.SetServices([]ServiceInfo{
+		{Name: "web", State: "running", Health: "healthy"},
+	})
+	assert.Equal(t, "web", m.selectedService())
+}
+
+func TestComputeLayout_Narrow(t *testing.T) {
+	l := ComputeLayout(80, 24)
+	assert.False(t, l.HasSidebar)
+	assert.Equal(t, 80, l.DetailWidth)
+	assert.Equal(t, 22, l.ContentHeight)
+}
+
+func TestComputeLayout_Wide(t *testing.T) {
+	l := ComputeLayout(120, 30)
+	assert.True(t, l.HasSidebar)
+	assert.Equal(t, 24, l.SidebarWidth)
+	assert.Equal(t, 96, l.DetailWidth)
+	assert.Equal(t, 28, l.ContentHeight)
+}
