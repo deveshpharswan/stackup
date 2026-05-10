@@ -1,8 +1,6 @@
 package e2e_test
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -32,8 +30,16 @@ func TestHealthLog_TimesOutWhenPatternNeverAppears(t *testing.T) {
 	t.Cleanup(func() { cleanupContainers(t, dir) })
 
 	// Override pattern to something that nginx never logs.
-	badStackup := "version: \"1\"\nservices:\n  web:\n    health:\n      type: log\n      pattern: \"PATTERN_THAT_NEVER_APPEARS_xyzzy_12345\"\n      timeout: 8s\n      interval: 1s\n"
-	if err := os.WriteFile(filepath.Join(dir, "stackup.yml"), []byte(badStackup), 0644); err != nil {
+	badStackup := `version: "1"
+services:
+  web:
+    health:
+      type: log
+      pattern: "PATTERN_THAT_NEVER_APPEARS_xyzzy_12345"
+      timeout: 8s
+      interval: 1s
+`
+	if err := writeTestFile(t, dir, "stackup.yml", badStackup); err != nil {
 		t.Fatalf("write stackup.yml: %v", err)
 	}
 
