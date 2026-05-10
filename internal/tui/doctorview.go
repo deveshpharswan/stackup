@@ -19,7 +19,7 @@ type DoctorViewModel struct {
 }
 
 func NewDoctorViewModel() DoctorViewModel {
-	return DoctorViewModel{expanded: -1}
+	return DoctorViewModel{expanded: -1, loading: true}
 }
 
 func (m DoctorViewModel) Init() tea.Cmd {
