@@ -75,10 +75,13 @@ func ValidateWithDefaults(envFile, exampleFile string, schema map[string]config.
 		val, ok := envVars[key]
 		if !ok {
 			if rule.Required {
-				result.Errors = append(result.Errors, ValidationError{
-					Key:     key,
-					Message: "required but not set",
-				})
+				// Skip if example loop already emitted an error for this key.
+				if _, inExample := example[key]; !inExample {
+					result.Errors = append(result.Errors, ValidationError{
+						Key:     key,
+						Message: "required but not set",
+					})
+				}
 			}
 			continue
 		}
