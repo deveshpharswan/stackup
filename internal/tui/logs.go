@@ -215,16 +215,20 @@ func (m LogsModel) renderLines() string {
 		if !m.timestamps {
 			display = stripTimestamp(display)
 		}
-		rendered := m.colorLogLine(display)
+		var rendered string
 		if m.filter != "" {
-			lower := strings.ToLower(rendered)
+			lower := strings.ToLower(display)
 			lowerFilter := strings.ToLower(m.filter)
 			idx := strings.Index(lower, lowerFilter)
 			if idx >= 0 {
-				rendered = rendered[:idx] +
-					lipgloss.NewStyle().Background(colorYellow).Foreground(lipgloss.Color("#000000")).Render(rendered[idx:idx+len(m.filter)]) +
-					rendered[idx+len(m.filter):]
+				rendered = display[:idx] +
+					lipgloss.NewStyle().Background(colorYellow).Foreground(lipgloss.Color("#000000")).Render(display[idx:idx+len(m.filter)]) +
+					display[idx+len(m.filter):]
+			} else {
+				rendered = display
 			}
+		} else {
+			rendered = m.colorLogLine(display)
 		}
 		if m.wrap && m.viewport.Width > 0 {
 			rendered = lipgloss.NewStyle().Width(m.viewport.Width).Render(rendered)
