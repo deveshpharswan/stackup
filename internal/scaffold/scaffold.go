@@ -52,7 +52,7 @@ var knownImages = map[string]HealthDefault{
 	"etcd":          {Type: "tcp", Host: "localhost", Port: 2379},
 	"zookeeper":     {Type: "tcp", Host: "localhost", Port: 2181},
 	"cockroachdb":   {Type: "tcp", Host: "localhost", Port: 26257},
-	"clickhouse":    {Type: "tcp", Host: "localhost", Port: 9000},
+	"clickhouse":    {Type: "tcp", Host: "localhost", Port: 8123},
 }
 
 // DetectHealthDefault checks if the image name contains any known pattern.

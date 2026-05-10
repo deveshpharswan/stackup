@@ -229,7 +229,10 @@ func runPartial(ctx context.Context, o *orchestrator.Orchestrator, tiers []orche
 		return nil
 	}
 
-	pct := (healthyCount * 100) / totalServices
+	pct := 0
+	if totalServices > 0 {
+		pct = (healthyCount * 100) / totalServices
+	}
 	fmt.Fprintf(cmd.OutOrStdout(), "\n⚠ Stack %d%% ready (%d/%d services healthy)\n", pct, healthyCount, totalServices)
 	failedNames := make([]string, 0, len(failed))
 	for name := range failed {

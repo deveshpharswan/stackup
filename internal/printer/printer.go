@@ -304,14 +304,22 @@ func (s *Spinner) Start(message string) {
 
 // Stop halts the spinner animation.
 func (s *Spinner) Stop() {
-	if !s.isTTY || !s.active {
+	if !s.isTTY {
+		return
+	}
+	s.mu.Lock()
+	active := s.active
+	s.mu.Unlock()
+	if !active {
 		return
 	}
 	s.stopOnce.Do(func() {
 		close(s.stop)
 	})
 	<-s.done
+	s.mu.Lock()
 	s.active = false
+	s.mu.Unlock()
 }
 
 func isTTY(w io.Writer) bool {

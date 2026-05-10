@@ -25,7 +25,8 @@ func (c *TCPChecker) Check(ctx context.Context) error {
 	addr := net.JoinHostPort(c.host, c.port)
 
 	err := Poll(ctx, c.timeout, c.interval, func() error {
-		conn, err := net.DialTimeout("tcp", addr, c.interval)
+		d := net.Dialer{Timeout: c.interval}
+		conn, err := d.DialContext(ctx, "tcp", addr)
 		if err != nil {
 			return err
 		}
