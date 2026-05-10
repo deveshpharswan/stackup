@@ -82,3 +82,10 @@ type shellRequestMsg struct {
 type SidebarSelectionMsg struct {
 	Service string
 }
+
+// InspectResultMsg carries Docker inspect data for a service.
+type InspectResultMsg struct {
+	Service string
+	Data    InspectData
+	Err     error
+}
