@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -33,6 +34,7 @@ type Model struct {
 	detail       DetailModel
 	logTail      LogsModel
 	statsHistory map[string]*StatsHistory
+	startedAt    map[string]time.Time
 
 	logs     LogsModel
 	doctor   DoctorViewModel
@@ -60,6 +62,7 @@ func NewModel(dc *dockerclient.Client) Model {
 		detail:       NewDetailModel(),
 		logTail:      NewLogsModel(),
 		statsHistory: make(map[string]*StatsHistory),
+		startedAt:    make(map[string]time.Time),
 		logs:         NewLogsModel(),
 		doctor:       NewDoctorViewModel(),
 		graph:        NewGraphModel(),
@@ -73,7 +76,13 @@ func NewModel(dc *dockerclient.Client) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.services.Init(), m.graph.Init())
+	return tea.Batch(m.services.Init(), m.graph.Init(), uiTick())
+}
+
+func uiTick() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return uiTickMsg(t)
+	})
 }
 
 func (m Model) isWide() bool {
@@ -218,9 +227,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ServiceUpdateMsg:
 		if msg.Err == nil {
+			now := time.Now()
 			names := make([]string, len(msg.Services))
 			for i, s := range msg.Services {
 				names[i] = s.Name
+				// Compute startedAt from Docker's reported uptime
+				if s.Uptime > 0 {
+					m.startedAt[s.Name] = now.Add(-s.Uptime)
+				}
 			}
 			m.command.SetServiceNames(names)
 			// Forward to sidebar
@@ -246,6 +260,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.detail = m.detail.SetService(svc, m.statsHistory)
 			}
 		}
+
+	case uiTickMsg:
+		// Recompute live uptimes from startedAt timestamps
+		now := time.Now()
+		for i, svc := range m.sidebar.services {
+			if t, ok := m.startedAt[svc.Name]; ok {
+				m.sidebar.services[i].Uptime = now.Sub(t)
+			}
+		}
+		for i, svc := range m.services.services {
+			if t, ok := m.startedAt[svc.Name]; ok {
+				m.services.services[i].Uptime = now.Sub(t)
+			}
+		}
+		for i, svc := range m.services.filtered {
+			if t, ok := m.startedAt[svc.Name]; ok {
+				m.services.filtered[i].Uptime = now.Sub(t)
+			}
+		}
+		// Also update detail panel if showing a service
+		if m.detail.service != nil {
+			if t, ok := m.startedAt[m.detail.service.Name]; ok {
+				m.detail.service.Uptime = now.Sub(t)
+			}
+		}
+		cmds = append(cmds, uiTick())
 
 	case SidebarSelectionMsg:
 		// Stop old log tail and start new one for selected service

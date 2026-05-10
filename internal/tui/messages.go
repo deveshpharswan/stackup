@@ -53,6 +53,8 @@ type ToastExpiredMsg struct{}
 
 type TickMsg time.Time
 
+type uiTickMsg time.Time
+
 type ConfirmAction int
 
 const (
