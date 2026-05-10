@@ -14,8 +14,13 @@ func TestNeedsOnboarding_MissingEnv(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, ".env")
-	if !NeedsOnboarding(envPath) {
-		t.Error("expected NeedsOnboarding to return true for missing .env")
+	examplePath := filepath.Join(dir, ".env.example")
+	// Write an example file so there is something to onboard
+	if err := os.WriteFile(examplePath, []byte("FOO=bar\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if !NeedsOnboarding(envPath, examplePath, nil) {
+		t.Error("expected NeedsOnboarding to return true for missing .env when example exists")
 	}
 }
 
@@ -23,10 +28,11 @@ func TestNeedsOnboarding_ExistingEnv(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, ".env")
+	examplePath := filepath.Join(dir, ".env.example")
 	if err := os.WriteFile(envPath, []byte("FOO=bar\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if NeedsOnboarding(envPath) {
+	if NeedsOnboarding(envPath, examplePath, nil) {
 		t.Error("expected NeedsOnboarding to return false for existing .env")
 	}
 }
@@ -131,5 +137,54 @@ func TestOnboarder_Run_Cancelled(t *testing.T) {
 	// Verify .env was NOT created.
 	if _, statErr := os.Stat(envPath); !os.IsNotExist(statErr) {
 		t.Error("expected .env to not exist after cancellation")
+	}
+}
+
+func TestNeedsOnboarding_MissingEnvNoSchemaNoExample(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, ".env")
+	examplePath := filepath.Join(dir, ".env.example")
+	// No schema, no example file — should NOT trigger onboarding
+	if NeedsOnboarding(envPath, examplePath, nil) {
+		t.Error("expected NeedsOnboarding to return false when no schema and no example file")
+	}
+}
+
+func TestNeedsOnboarding_MissingEnvWithSchema(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, ".env")
+	examplePath := filepath.Join(dir, ".env.example")
+	schema := map[string]config.EnvVar{"DB_URL": {Required: true}}
+	if !NeedsOnboarding(envPath, examplePath, schema) {
+		t.Error("expected NeedsOnboarding to return true when schema is defined")
+	}
+}
+
+func TestNeedsOnboarding_MissingEnvWithExampleFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, ".env")
+	examplePath := filepath.Join(dir, ".env.example")
+	if err := os.WriteFile(examplePath, []byte("FOO=bar\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if !NeedsOnboarding(envPath, examplePath, nil) {
+		t.Error("expected NeedsOnboarding to return true when .env.example exists")
+	}
+}
+
+func TestNeedsOnboarding_ExistingEnvAlwaysFalse(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, ".env")
+	examplePath := filepath.Join(dir, ".env.example")
+	if err := os.WriteFile(envPath, []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
+	schema := map[string]config.EnvVar{"DB_URL": {Required: true}}
+	if NeedsOnboarding(envPath, examplePath, schema) {
+		t.Error("expected NeedsOnboarding to return false when .env exists, regardless of schema")
 	}
 }

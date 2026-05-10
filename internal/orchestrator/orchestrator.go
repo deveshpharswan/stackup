@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,12 @@ func New(p *printer.Printer) *Orchestrator {
 // PreFlight validates environment variables and injects schema defaults.
 // Returns true if validation passes, along with a map of injected default values.
 func (o *Orchestrator) PreFlight(envFile, exampleFile string, schema map[string]config.EnvVar) (bool, map[string]string) {
+	// Skip entirely when there is nothing to validate: no schema and no example file.
+	if len(schema) == 0 {
+		if _, err := os.Stat(exampleFile); os.IsNotExist(err) {
+			return true, nil
+		}
+	}
 	o.p.Phase("Pre-flight")
 	result, injected := env.ValidateWithDefaults(envFile, exampleFile, schema)
 

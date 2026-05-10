@@ -17,7 +17,11 @@ func newInitCmd() *cobra.Command {
 			if _, err := os.Stat(constants.DefaultConfigFile); err == nil {
 				return fmt.Errorf("%s already exists — delete it first if you want to regenerate", constants.DefaultConfigFile)
 			}
-			out, err := scaffold.Generate(constants.DefaultComposeFile, constants.DefaultExampleFile)
+			composePath, err := resolveComposeFile()
+			if err != nil {
+				return err
+			}
+			out, err := scaffold.Generate(composePath, constants.DefaultExampleFile)
 			if err != nil {
 				return err
 			}

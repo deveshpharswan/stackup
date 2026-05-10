@@ -13,10 +13,20 @@ import (
 	"github.com/deveshpharswan/stackup/internal/config"
 )
 
-// NeedsOnboarding returns true if the .env file does not exist.
-func NeedsOnboarding(envFile string) bool {
-	_, err := os.Stat(envFile)
-	return os.IsNotExist(err)
+// NeedsOnboarding returns true only when the env file is absent AND there is
+// something worth configuring: either schema keys or an .env.example file.
+// If neither exists, the project does not use env vars and no prompt is shown.
+func NeedsOnboarding(envFile, exampleFile string, schema map[string]config.EnvVar) bool {
+	if _, err := os.Stat(envFile); err == nil {
+		return false
+	}
+	if len(schema) > 0 {
+		return true
+	}
+	if _, err := os.Stat(exampleFile); err == nil {
+		return true
+	}
+	return false
 }
 
 // Onboarder walks new developers through creating a .env file interactively.

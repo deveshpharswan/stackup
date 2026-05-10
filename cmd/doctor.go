@@ -40,8 +40,13 @@ func newDoctorCmd() *cobra.Command {
 			if output != "text" && output != "json" {
 				return fmt.Errorf("unknown output format %q — must be text or json", output)
 			}
+			composePath, err := resolveComposeFile()
+			if err != nil {
+				// Doctor can still run most checks without a compose file; use empty string.
+				composePath = ""
+			}
 			opts := &doctor.Options{
-				ComposeFile: constants.DefaultComposeFile,
+				ComposeFile: composePath,
 				EnvFile:     constants.DefaultEnvFile,
 				ExampleFile: constants.DefaultExampleFile,
 				ConfigFile:  constants.DefaultConfigFile,

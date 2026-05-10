@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -130,4 +131,21 @@ func TestStartTier_ParallelWithOneFailure(t *testing.T) {
 	assert.Contains(t, err.Error(), "connection refused")
 	// The healthy service should still be printed
 	assert.Contains(t, buf.String(), "healthy-svc")
+}
+
+func TestPreFlight_SkipsWhenNothingToValidate(t *testing.T) {
+	dir := t.TempDir()
+	envFile := filepath.Join(dir, ".env")
+	exampleFile := filepath.Join(dir, ".env.example")
+	// Neither .env nor .env.example exists, no schema
+	var buf bytes.Buffer
+	p := printer.New(&buf)
+	o := orchestrator.New(p)
+	ok, injected := o.PreFlight(envFile, exampleFile, nil)
+	if !ok {
+		t.Error("expected PreFlight to return true when nothing to validate")
+	}
+	if len(injected) != 0 {
+		t.Errorf("expected no injected values, got %v", injected)
+	}
 }

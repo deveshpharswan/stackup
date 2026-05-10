@@ -35,6 +35,10 @@ func newUpCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer cancel()
+			composePath, err := resolveComposeFile()
+			if err != nil {
+				return err
+			}
 			p := printer.New(cmd.OutOrStdout())
 			cfg, err := config.LoadOrEmpty(constants.DefaultConfigFile)
 			if err != nil {
@@ -42,7 +46,7 @@ func newUpCmd() *cobra.Command {
 			}
 			o := orchestrator.New(p)
 
-			if onboard.NeedsOnboarding(constants.DefaultEnvFile) {
+			if onboard.NeedsOnboarding(constants.DefaultEnvFile, constants.DefaultExampleFile, cfg.Env.Schema) {
 				ob := onboard.New(cmd.OutOrStdout(), os.Stdin, cfg.Env.Schema)
 				if err := ob.Run(constants.DefaultEnvFile, constants.DefaultExampleFile); err != nil {
 					return err
@@ -60,7 +64,7 @@ func newUpCmd() *cobra.Command {
 				childEnv = append(childEnv, key+"="+val)
 			}
 
-			composeServices, err := scaffold.ParseServices(constants.DefaultComposeFile)
+			composeServices, err := scaffold.ParseServices(composePath)
 			if err != nil {
 				return fmt.Errorf("reading compose file: %w", err)
 			}
@@ -89,7 +93,7 @@ func newUpCmd() *cobra.Command {
 				}
 				for _, svc := range onlySvcs {
 					if _, exists := composeServices[svc]; !exists {
-						return fmt.Errorf("unknown service %q (not in docker-compose.yml)", svc)
+						return fmt.Errorf("unknown service %q (not in compose file)", svc)
 					}
 				}
 				composeServices = filterWithDeps(composeServices, onlySvcs)
@@ -106,6 +110,11 @@ func newUpCmd() *cobra.Command {
 			}
 			defer dc.Close()
 			checkers := buildCheckers(cfg, dc)
+
+			if len(checkers) == 0 && len(composeServices) > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "  ℹ  No health checks configured — add health: blocks to stackup.yml\n")
+				fmt.Fprintf(cmd.OutOrStdout(), "     to enable startup sequencing (run `stackup init` to generate a starter config).\n\n")
+			}
 
 			// Create stackup docker client for log fetching on failure
 			logClient, err := docker.NewClient()
