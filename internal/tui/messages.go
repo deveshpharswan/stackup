@@ -80,6 +80,10 @@ type shellRequestMsg struct {
 	Service string
 }
 
+type startServiceMsg struct {
+	Service string
+}
+
 type SidebarSelectionMsg struct {
 	Service string
 }

@@ -279,6 +279,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case shellRequestMsg:
 		return m, shellIntoService(msg.Service)
 
+	case startServiceMsg:
+		return m, startService(msg.Service)
+
 	case CommandResult:
 		if msg.IsQuit {
 			m.quitting = true
@@ -569,6 +572,17 @@ func stopService(name string) tea.Cmd {
 			return ActionResultMsg{Err: fmt.Errorf("stop %s: %w", name, err)}
 		}
 		return ActionResultMsg{Text: fmt.Sprintf("Service %q stopped", name)}
+	}
+}
+
+func startService(name string) tea.Cmd {
+	return func() tea.Msg {
+		c := exec.Command("docker", "compose", "up", "-d", name)
+		err := c.Run()
+		if err != nil {
+			return ActionResultMsg{Err: fmt.Errorf("start %s: %w", name, err)}
+		}
+		return ActionResultMsg{Text: fmt.Sprintf("Service %q started", name)}
 	}
 }
 

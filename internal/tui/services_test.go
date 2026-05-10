@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestServicesModel_UpdateWithServices(t *testing.T) {
@@ -79,4 +80,26 @@ func TestParseUptime(t *testing.T) {
 			t.Errorf("parseUptime(%q) = %v, want %v", tc.input, got, tc.want)
 		}
 	}
+}
+
+func TestServicesModel_KeyX_EmitsShellRequest(t *testing.T) {
+	m := NewServicesModel(nil)
+	m.services = []ServiceInfo{{Name: "api", State: "running"}}
+	m.filtered = m.services
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	assert.IsType(t, shellRequestMsg{}, msg)
+}
+
+func TestServicesModel_KeyU_EmitsStartMsg(t *testing.T) {
+	m := NewServicesModel(nil)
+	m.services = []ServiceInfo{{Name: "api", State: "exited"}}
+	m.filtered = m.services
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+	require.NotNil(t, cmd)
+	msg := cmd()
+	assert.IsType(t, startServiceMsg{}, msg)
 }
