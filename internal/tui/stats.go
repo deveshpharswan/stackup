@@ -14,7 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const sparklineLen = 8
+const sparklineLen = 16
 
 var sparkChars = []rune{'▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 
@@ -35,18 +35,30 @@ func (h *StatsHistory) Push(cpu, mem float64) {
 }
 
 func renderSparkline(values []float64, maxVal float64) string {
+	return renderSparklineN(values, maxVal, sparklineLen)
+}
+
+func renderSparklineN(values []float64, maxVal float64, n int) string {
+	if n <= 0 {
+		n = sparklineLen
+	}
 	if len(values) == 0 {
-		return strings.Repeat(string(sparkChars[0]), sparklineLen)
+		return strings.Repeat(string(sparkChars[0]), n)
 	}
 	if maxVal <= 0 {
 		maxVal = 100
 	}
 	var b strings.Builder
-	pad := sparklineLen - len(values)
-	for i := 0; i < pad; i++ {
-		b.WriteRune(sparkChars[0])
+	// Use last n values
+	start := len(values) - n
+	if start < 0 {
+		// Pad with empty chars
+		for i := 0; i < -start; i++ {
+			b.WriteRune(sparkChars[0])
+		}
+		start = 0
 	}
-	for _, v := range values {
+	for _, v := range values[start:] {
 		idx := int((v / maxVal) * float64(len(sparkChars)-1))
 		if idx < 0 {
 			idx = 0

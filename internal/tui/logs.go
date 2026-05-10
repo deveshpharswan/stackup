@@ -3,6 +3,7 @@ package tui
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -20,7 +21,8 @@ type LogsModel struct {
 	timestamps bool
 	wrap       bool
 	ready      bool
-	filtering  bool // stub field for in-log filter (Task 11)
+	filtering  bool   // true when filter input is open
+	filter     string // active filter text
 }
 
 func NewLogsModel() LogsModel {
@@ -67,7 +69,30 @@ func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
+		if m.filtering {
+			switch msg.String() {
+			case "esc", "enter":
+				m.filtering = false
+			case "backspace", "ctrl+h":
+				if len(m.filter) > 0 {
+					m.filter = m.filter[:len(m.filter)-1]
+					m.viewport.SetContent(m.renderLines())
+				}
+			default:
+				if len(msg.Runes) > 0 {
+					m.filter += string(msg.Runes)
+					m.viewport.SetContent(m.renderLines())
+				}
+			}
+			return m, nil
+		}
 		switch msg.String() {
+		case "esc":
+			if m.filter != "" {
+				m.filter = ""
+				m.viewport.SetContent(m.renderLines())
+				return m, nil
+			}
 		case "t":
 			m.timestamps = !m.timestamps
 			m.viewport.SetContent(m.renderLines())
@@ -98,13 +123,28 @@ func (m LogsModel) View(width, height int) string {
 		return styleDim.Render("  No service selected")
 	}
 	m.viewport.Width = width
-	m.viewport.Height = height
-	return m.viewport.View()
+	vpHeight := height
+	if m.filtering || m.filter != "" {
+		vpHeight = height - 1
+	}
+	m.viewport.Height = vpHeight
+
+	view := m.viewport.View()
+
+	if m.filtering {
+		filterBar := styleStatusBar.Width(width).Render("  Filter: " + m.filter + "█")
+		return lipgloss.JoinVertical(lipgloss.Left, view, filterBar)
+	}
+	if m.filter != "" {
+		filterBar := styleDim.Width(width).Render(fmt.Sprintf("  Filter: %s  (esc to clear)", m.filter))
+		return lipgloss.JoinVertical(lipgloss.Left, view, filterBar)
+	}
+	return view
 }
 
 func (m LogsModel) ServiceName() string { return m.service }
 
-// ActivateFilter enables the in-log filter mode (stub — full implementation in Task 11).
+// ActivateFilter enables the in-log filter mode.
 func (m LogsModel) ActivateFilter() (LogsModel, tea.Cmd) {
 	m.filtering = true
 	return m, nil
@@ -168,11 +208,24 @@ func waitForLogLine(ch <-chan string) tea.Cmd {
 func (m LogsModel) renderLines() string {
 	var b strings.Builder
 	for _, line := range m.lines {
+		if m.filter != "" && !strings.Contains(strings.ToLower(line), strings.ToLower(m.filter)) {
+			continue
+		}
 		display := line
 		if !m.timestamps {
 			display = stripTimestamp(display)
 		}
 		rendered := m.colorLogLine(display)
+		if m.filter != "" {
+			lower := strings.ToLower(rendered)
+			lowerFilter := strings.ToLower(m.filter)
+			idx := strings.Index(lower, lowerFilter)
+			if idx >= 0 {
+				rendered = rendered[:idx] +
+					lipgloss.NewStyle().Background(colorYellow).Foreground(lipgloss.Color("#000000")).Render(rendered[idx:idx+len(m.filter)]) +
+					rendered[idx+len(m.filter):]
+			}
+		}
 		if m.wrap && m.viewport.Width > 0 {
 			rendered = lipgloss.NewStyle().Width(m.viewport.Width).Render(rendered)
 		}

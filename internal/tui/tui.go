@@ -172,6 +172,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ServiceUpdateMsg:
 		if msg.Err == nil {
+			// Detect newly stopped/recovered services
+			prevByName := make(map[string]string) // name → state
+			for _, s := range m.sidebar.services {
+				prevByName[s.Name] = s.State
+			}
+			for _, s := range msg.Services {
+				prev, ok := prevByName[s.Name]
+				if !ok {
+					continue
+				}
+				if prev == "running" && s.State == "exited" {
+					svcName := s.Name
+					cmds = append(cmds, func() tea.Msg {
+						return ToastMsg{Text: svcName + " stopped unexpectedly", Level: toastWarning}
+					})
+				}
+			}
+
 			names := make([]string, len(msg.Services))
 			for i, s := range msg.Services {
 				names[i] = s.Name
@@ -247,11 +265,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	case ToastMsg:
-		m.toast = m.toast.Show(msg.Text)
+		m.toast = m.toast.ShowLevel(msg.Text, msg.Level)
 		cmds = append(cmds, m.toast.Tick())
 
 	case ToastExpiredMsg:
-		m.toast = m.toast.Hide()
+		m.toast = m.toast.HideOldest()
+		if len(m.toast.entries) > 0 {
+			cmds = append(cmds, m.toast.Tick())
+		}
 
 	case ConfirmRequestMsg:
 		m.confirm = m.confirm.Request(msg.Action, msg.Service)
@@ -270,9 +291,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ActionResultMsg:
 		if msg.Err != nil {
-			m.toast = m.toast.Show("Error: " + msg.Err.Error())
+			m.toast = m.toast.ShowLevel("Error: "+msg.Err.Error(), toastError)
 		} else {
-			m.toast = m.toast.Show(msg.Text)
+			m.toast = m.toast.ShowLevel(msg.Text, toastInfo)
 		}
 		return m, m.toast.Tick()
 

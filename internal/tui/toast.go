@@ -6,34 +6,62 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const maxToasts = 3
+
+type toastLevel int
+
+const (
+	toastInfo toastLevel = iota
+	toastSuccess
+	toastWarning
+	toastError
+)
+
+type toastEntry struct {
+	text  string
+	level toastLevel
+}
+
 type ToastModel struct {
-	message string
-	visible bool
+	entries []toastEntry
 }
 
 func NewToastModel() ToastModel { return ToastModel{} }
 
 func (m ToastModel) Show(text string) ToastModel {
-	m.message = text
-	m.visible = true
-	return m
+	return m.ShowLevel(text, toastInfo)
 }
 
-func (m ToastModel) Hide() ToastModel {
-	m.message = ""
-	m.visible = false
-	return m
-}
-
-func (m ToastModel) Message() string {
-	if m.visible {
-		return m.message
+func (m ToastModel) ShowLevel(text string, level toastLevel) ToastModel {
+	m.entries = append(m.entries, toastEntry{text: text, level: level})
+	if len(m.entries) > maxToasts {
+		m.entries = m.entries[len(m.entries)-maxToasts:]
 	}
-	return ""
+	return m
+}
+
+func (m ToastModel) HideOldest() ToastModel {
+	if len(m.entries) > 0 {
+		m.entries = m.entries[1:]
+	}
+	return m
+}
+
+// Message returns the most recent toast text (for status bar compat).
+func (m ToastModel) Message() string {
+	if len(m.entries) == 0 {
+		return ""
+	}
+	return m.entries[len(m.entries)-1].text
 }
 
 func (m ToastModel) Tick() tea.Cmd {
 	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
 		return ToastExpiredMsg{}
 	})
+}
+
+// Hide removes the oldest toast (backward compat with existing callers).
+func (m ToastModel) Hide() ToastModel {
+	return m.HideOldest()
 }

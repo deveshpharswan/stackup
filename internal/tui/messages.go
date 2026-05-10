@@ -46,7 +46,8 @@ type DoctorResultMsg struct {
 type DoctorRunningMsg struct{}
 
 type ToastMsg struct {
-	Text string
+	Text  string
+	Level toastLevel
 }
 
 type ToastExpiredMsg struct{}
