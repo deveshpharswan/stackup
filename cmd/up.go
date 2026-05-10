@@ -36,7 +36,10 @@ func newUpCmd() *cobra.Command {
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer cancel()
 			p := printer.New(cmd.OutOrStdout())
-			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
+			cfg, err := config.LoadOrEmpty(constants.DefaultConfigFile)
+			if err != nil {
+				return fmt.Errorf("invalid stackup.yml: %w", err)
+			}
 			o := orchestrator.New(p)
 
 			if onboard.NeedsOnboarding(constants.DefaultEnvFile) {

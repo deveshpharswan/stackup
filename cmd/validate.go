@@ -30,7 +30,10 @@ func newValidateCmd() *cobra.Command {
 		Use:   "validate",
 		Short: "Validate .env without starting any services",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
+			cfg, err := config.LoadOrEmpty(constants.DefaultConfigFile)
+			if err != nil {
+				return fmt.Errorf("invalid stackup.yml: %w", err)
+			}
 
 			if output == "json" {
 				return validateAsJSON(cmd, cfg)

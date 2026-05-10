@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -140,14 +141,17 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// LoadOrEmpty returns an empty Config when the file does not exist.
-// Allows projects that haven't added stackup.yml yet to still use the tool.
-func LoadOrEmpty(path string) *Config {
+// LoadOrEmpty returns an empty Config when the file does not exist,
+// and returns an error for any other failure (bad YAML, invalid config).
+func LoadOrEmpty(path string) (*Config, error) {
 	cfg, err := Load(path)
 	if err != nil {
-		return &Config{}
+		if errors.Is(err, os.ErrNotExist) {
+			return &Config{}, nil
+		}
+		return nil, err
 	}
-	return cfg
+	return cfg, nil
 }
 
 // ProfileServices returns the service names for a given profile.

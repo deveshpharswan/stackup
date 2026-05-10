@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/deveshpharswan/stackup/internal/config"
@@ -49,8 +50,21 @@ func TestLoad_MissingFile(t *testing.T) {
 
 func TestLoadOrEmpty_MissingFile(t *testing.T) {
 	t.Parallel()
-	cfg := config.LoadOrEmpty("nonexistent.yml")
+	cfg, err := config.LoadOrEmpty("nonexistent.yml")
+	require.NoError(t, err)
 	assert.NotNil(t, cfg)
 	assert.Empty(t, cfg.Services)
 	assert.Empty(t, cfg.Commands)
+}
+
+func TestLoadOrEmpty_MalformedYAML(t *testing.T) {
+	t.Parallel()
+	f, err := os.CreateTemp("", "stackup-*.yml")
+	require.NoError(t, err)
+	defer os.Remove(f.Name())
+	_, _ = f.WriteString(": invalid: yaml: [\n")
+	f.Close()
+
+	_, err = config.LoadOrEmpty(f.Name())
+	assert.Error(t, err)
 }

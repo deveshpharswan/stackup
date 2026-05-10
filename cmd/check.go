@@ -51,7 +51,10 @@ func newCheckCmd() *cobra.Command {
 			}
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer cancel()
-			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
+			cfg, err := config.LoadOrEmpty(constants.DefaultConfigFile)
+			if err != nil {
+				return fmt.Errorf("invalid stackup.yml: %w", err)
+			}
 
 			dc, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
 			if err != nil {

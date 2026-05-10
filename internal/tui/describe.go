@@ -28,7 +28,10 @@ func (m DescribeModel) Start(service string, services []ServiceInfo, width, heig
 	m.viewport = vp
 	m.ready = true
 
-	cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
+	cfg, err := config.LoadOrEmpty(constants.DefaultConfigFile)
+	if err != nil {
+		cfg = &config.Config{}
+	}
 	m.content = m.buildContent(service, services, cfg)
 	m.viewport.SetContent(m.content)
 	return m, nil

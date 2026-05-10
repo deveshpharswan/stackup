@@ -34,7 +34,10 @@ func newRestartCmd() *cobra.Command {
 			if err := c.Restart(ctx, id); err != nil {
 				return err
 			}
-			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
+			cfg, err := config.LoadOrEmpty(constants.DefaultConfigFile)
+			if err != nil {
+				return fmt.Errorf("invalid stackup.yml: %w", err)
+			}
 			svc, ok := cfg.Services[svcName]
 			if !ok || svc.Health == nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s restarted\n", svcName)
