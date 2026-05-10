@@ -150,7 +150,12 @@ func (m DoctorViewModel) runChecks() tea.Cmd {
 	return func() tea.Msg {
 		d := doctor.New()
 		opts := &doctor.Options{
-			ComposeFile: constants.DefaultComposeFile,
+			ComposeFile: func() string {
+				if p := constants.FindComposeFile("."); p != "" {
+					return p
+				}
+				return constants.DefaultComposeFile
+			}(),
 			EnvFile:     constants.DefaultEnvFile,
 			ExampleFile: constants.DefaultExampleFile,
 			ConfigFile:  constants.DefaultConfigFile,

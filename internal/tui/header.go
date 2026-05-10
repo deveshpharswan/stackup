@@ -3,11 +3,13 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/deveshpharswan/stackup/internal/constants"
 )
 
 type HeaderModel struct {
@@ -20,9 +22,13 @@ type HeaderModel struct {
 }
 
 func NewHeaderModel() HeaderModel {
+	composeName := "docker-compose.yml"
+	if found := constants.FindComposeFile("."); found != "" {
+		composeName = filepath.Base(found)
+	}
 	return HeaderModel{
 		stack:     currentDirName(),
-		compose:   "docker-compose.yml",
+		compose:   composeName,
 		startTime: time.Now(),
 	}
 }

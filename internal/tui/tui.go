@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	dockerclient "github.com/docker/docker/client"
 )
 
 type ViewType int
@@ -44,11 +45,11 @@ type Model struct {
 	quitting bool
 }
 
-func NewModel() Model {
+func NewModel(dc *dockerclient.Client) Model {
 	return Model{
 		activeView: ViewServices,
 		viewStack:  []ViewType{ViewServices},
-		services:   NewServicesModel(),
+		services:   NewServicesModel(dc),
 		logs:       NewLogsModel(),
 		doctor:     NewDoctorViewModel(),
 		graph:      NewGraphModel(),
@@ -353,8 +354,15 @@ func (m Model) popView() Model {
 }
 
 func Run() error {
-	p := tea.NewProgram(NewModel(), tea.WithAltScreen())
-	_, err := p.Run()
+	dc, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+	if err != nil {
+		dc = nil
+	}
+	if dc != nil {
+		defer dc.Close()
+	}
+	p := tea.NewProgram(NewModel(dc), tea.WithAltScreen())
+	_, err = p.Run()
 	return err
 }
 

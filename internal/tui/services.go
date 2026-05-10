@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	dockerclient "github.com/docker/docker/client"
 )
 
 type ServicesModel struct {
+	dc           *dockerclient.Client
 	services     []ServiceInfo
 	filtered     []ServiceInfo
 	cursor       int
@@ -21,14 +24,15 @@ type ServicesModel struct {
 	err          error
 }
 
-func NewServicesModel() ServicesModel {
+func NewServicesModel(dc *dockerclient.Client) ServicesModel {
 	return ServicesModel{
+		dc:           dc,
 		statsHistory: make(map[string]*StatsHistory),
 	}
 }
 
 func (m ServicesModel) Init() tea.Cmd {
-	return tea.Batch(pollServices(), tickEvery(2*time.Second), pollStats(), statsTickEvery(5*time.Second))
+	return tea.Batch(pollServices(), tickEvery(2*time.Second), pollStats(m.dc), statsTickEvery(5*time.Second))
 }
 
 func (m ServicesModel) Update(msg tea.Msg) (ServicesModel, tea.Cmd) {
@@ -60,7 +64,7 @@ func (m ServicesModel) Update(msg tea.Msg) (ServicesModel, tea.Cmd) {
 			m.applyFilter()
 		}
 	case statsTickMsg:
-		return m, tea.Batch(pollStats(), statsTickEvery(5*time.Second))
+		return m, tea.Batch(pollStats(m.dc), statsTickEvery(5*time.Second))
 	case TickMsg:
 		return m, tea.Batch(pollServices(), tickEvery(2*time.Second))
 	case tea.KeyMsg:
@@ -299,13 +303,20 @@ func parseUptime(status string) time.Duration {
 	if !strings.Contains(lower, "up") {
 		return 0
 	}
-	re := regexp.MustCompile(`up\s+(?:about\s+)?(\d+)\s*(second|minute|hour|day)`)
+	// Handle Docker's natural-language cases for short uptimes.
+	if strings.Contains(lower, "about a minute") || strings.Contains(lower, "a minute") {
+		return time.Minute
+	}
+	if strings.Contains(lower, "about an hour") || strings.Contains(lower, "an hour") {
+		return time.Hour
+	}
+	// Numeric: "Up 37 seconds", "Up 2 minutes", "Up 3 hours", "Up 5 days"
+	re := regexp.MustCompile(`(\d+)\s*(second|minute|hour|day)`)
 	matches := re.FindStringSubmatch(lower)
 	if len(matches) < 3 {
 		return 0
 	}
-	n := 0
-	fmt.Sscanf(matches[1], "%d", &n)
+	n, _ := strconv.Atoi(matches[1])
 	switch matches[2] {
 	case "second":
 		return time.Duration(n) * time.Second

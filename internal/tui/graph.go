@@ -24,7 +24,11 @@ func NewGraphModel() GraphModel {
 
 func (m GraphModel) Init() tea.Cmd {
 	return func() tea.Msg {
-		composeSvcs, err := scaffold.ParseServices(constants.DefaultComposeFile)
+		composePath := constants.FindComposeFile(".")
+		if composePath == "" {
+			composePath = constants.DefaultComposeFile
+		}
+		composeSvcs, err := scaffold.ParseServices(composePath)
 		if err != nil {
 			return graphDataMsg{err: err}
 		}

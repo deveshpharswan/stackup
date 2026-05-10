@@ -9,7 +9,7 @@ import (
 )
 
 func TestServicesModel_UpdateWithServices(t *testing.T) {
-	m := NewServicesModel()
+	m := NewServicesModel(nil)
 	msg := ServiceUpdateMsg{
 		Services: []ServiceInfo{
 			{Name: "api", State: "running", Health: "healthy", Ports: "8080/tcp", Tier: 2, Uptime: 5 * time.Minute},
@@ -23,7 +23,7 @@ func TestServicesModel_UpdateWithServices(t *testing.T) {
 }
 
 func TestServicesModel_Navigation(t *testing.T) {
-	m := NewServicesModel()
+	m := NewServicesModel(nil)
 	msg := ServiceUpdateMsg{
 		Services: []ServiceInfo{
 			{Name: "api", State: "running", Health: "healthy"},
@@ -40,7 +40,7 @@ func TestServicesModel_Navigation(t *testing.T) {
 }
 
 func TestServicesModel_Filter(t *testing.T) {
-	m := NewServicesModel()
+	m := NewServicesModel(nil)
 	msg := ServiceUpdateMsg{
 		Services: []ServiceInfo{
 			{Name: "api", State: "running", Health: "healthy"},
@@ -55,4 +55,28 @@ func TestServicesModel_Filter(t *testing.T) {
 
 func keyMsg(k string) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
+}
+
+func TestParseUptime(t *testing.T) {
+	cases := []struct {
+		input string
+		want  time.Duration
+	}{
+		{"Up About a minute", time.Minute},
+		{"Up about a minute", time.Minute},
+		{"Up About an hour", time.Hour},
+		{"Up about an hour", time.Hour},
+		{"Up 37 seconds", 37 * time.Second},
+		{"Up 2 minutes", 2 * time.Minute},
+		{"Up 3 hours", 3 * time.Hour},
+		{"Up 5 days", 5 * 24 * time.Hour},
+		{"Exited (1) 2 minutes ago", 0},
+		{"", 0},
+	}
+	for _, tc := range cases {
+		got := parseUptime(tc.input)
+		if got != tc.want {
+			t.Errorf("parseUptime(%q) = %v, want %v", tc.input, got, tc.want)
+		}
+	}
 }

@@ -110,7 +110,11 @@ func (m DescribeModel) buildContent(name string, services []ServiceInfo, cfg *co
 		}
 	}
 
-	composeSvcs, err := scaffold.ParseServices(constants.DefaultComposeFile)
+	composePath := constants.FindComposeFile(".")
+	if composePath == "" {
+		composePath = constants.DefaultComposeFile
+	}
+	composeSvcs, err := scaffold.ParseServices(composePath)
 	if err == nil {
 		if deps, ok := composeSvcs[name]; ok && len(deps) > 0 {
 			b.WriteString(styleBold.Render("  Depends On:") + "\n")
