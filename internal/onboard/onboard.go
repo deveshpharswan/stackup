@@ -36,6 +36,15 @@ func New(w io.Writer, r io.Reader, schema map[string]config.EnvVar) *Onboarder {
 	}
 }
 
+// quoteEnvValue wraps the value in double quotes if it contains characters
+// that would break godotenv parsing.
+func quoteEnvValue(v string) string {
+	if !strings.ContainsAny(v, "=#\"\n\r\t ") {
+		return v
+	}
+	return `"` + strings.ReplaceAll(v, `"`, `\"`) + `"`
+}
+
 // Run shows available keys from .env.example and schema, prompts the user for
 // values, and creates the envFile. Returns nil on success or an error if the
 // user cancels.
@@ -99,7 +108,7 @@ func (o *Onboarder) Run(envFile, exampleFile string) error {
 	// Write .env file.
 	var sb strings.Builder
 	for _, k := range keys {
-		sb.WriteString(fmt.Sprintf("%s=%s\n", k, values[k]))
+		sb.WriteString(fmt.Sprintf("%s=%s\n", k, quoteEnvValue(values[k])))
 	}
 	if err := os.WriteFile(envFile, []byte(sb.String()), 0600); err != nil {
 		return fmt.Errorf("writing .env: %w", err)
