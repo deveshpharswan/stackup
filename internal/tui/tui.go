@@ -9,6 +9,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/deveshpharswan/stackup/internal/config"
+	"github.com/deveshpharswan/stackup/internal/constants"
+	"github.com/deveshpharswan/stackup/internal/scaffold"
 	dockerclient "github.com/docker/docker/client"
 )
 
@@ -35,6 +38,11 @@ type Model struct {
 	logTail      LogsModel
 	statsHistory map[string]*StatsHistory
 	startedAt    map[string]time.Time
+	tierMap      map[string]int
+
+	// Cached config data (loaded once at startup)
+	cachedHealthDescs map[string]string
+	cachedDeps        map[string][]string
 
 	logs     LogsModel
 	doctor   DoctorViewModel
@@ -54,24 +62,57 @@ type Model struct {
 }
 
 func NewModel(dc *dockerclient.Client) Model {
+	healthDescs := make(map[string]string)
+	deps := make(map[string][]string)
+
+	cfg, _ := config.LoadOrEmpty(constants.DefaultConfigFile)
+	if cfg != nil {
+		for name, svcCfg := range cfg.Services {
+			if svcCfg.Health != nil {
+				hc := svcCfg.Health
+				desc := hc.Type
+				if hc.URL != "" {
+					desc += " " + hc.URL
+				} else if hc.Host != "" {
+					desc += fmt.Sprintf(" %s:%d", hc.Host, hc.Port)
+				} else if hc.Pattern != "" {
+					desc += " \"" + hc.Pattern + "\""
+				}
+				healthDescs[name] = desc
+			}
+		}
+	}
+
+	composePath := constants.FindComposeFile(".")
+	if composePath == "" {
+		composePath = constants.DefaultComposeFile
+	}
+	composeSvcs, err := scaffold.ParseServices(composePath)
+	if err == nil {
+		deps = composeSvcs
+	}
+
 	return Model{
-		activeView:   ViewServices,
-		viewStack:    []ViewType{ViewServices},
-		services:     NewServicesModel(dc),
-		sidebar:      NewSidebarModel(),
-		detail:       NewDetailModel(),
-		logTail:      NewLogsModel(),
-		statsHistory: make(map[string]*StatsHistory),
-		startedAt:    make(map[string]time.Time),
-		logs:         NewLogsModel(),
-		doctor:       NewDoctorViewModel(),
-		graph:        NewGraphModel(),
-		describe:     NewDescribeModel(),
-		header:       NewHeaderModel(),
-		command:      NewCommandModel(),
-		toast:        NewToastModel(),
-		help:         NewHelpModel(),
-		confirm:      NewConfirmModel(),
+		activeView:        ViewServices,
+		viewStack:         []ViewType{ViewServices},
+		services:          NewServicesModel(dc),
+		sidebar:           NewSidebarModel(),
+		detail:            NewDetailModel(),
+		logTail:           NewLogsModel(),
+		statsHistory:      make(map[string]*StatsHistory),
+		startedAt:         make(map[string]time.Time),
+		tierMap:           make(map[string]int),
+		cachedHealthDescs: healthDescs,
+		cachedDeps:        deps,
+		logs:              NewLogsModel(),
+		doctor:            NewDoctorViewModel(),
+		graph:             NewGraphModel(),
+		describe:          NewDescribeModel(),
+		header:            NewHeaderModel(),
+		command:           NewCommandModel(),
+		toast:             NewToastModel(),
+		help:              NewHelpModel(),
+		confirm:           NewConfirmModel(),
 	}
 }
 
@@ -87,6 +128,25 @@ func uiTick() tea.Cmd {
 
 func (m Model) isWide() bool {
 	return m.width >= minWidthWide
+}
+
+func (m Model) updateDetail(svc *ServiceInfo) DetailModel {
+	d := m.detail.SetService(svc, m.statsHistory)
+	if svc != nil {
+		d = d.SetServiceMeta(m.cachedDeps[svc.Name], m.cachedHealthDescs[svc.Name])
+	}
+	return d
+}
+
+func (m *Model) applyTiers() {
+	if len(m.tierMap) == 0 {
+		return
+	}
+	for i, s := range m.sidebar.services {
+		if tier, ok := m.tierMap[s.Name]; ok {
+			m.sidebar.services[i].Tier = tier
+		}
+	}
 }
 
 // selectedService returns the name of the currently selected service,
@@ -224,6 +284,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		layout := ComputeLayout(m.width, m.height)
+		m.sidebar = m.sidebar.SetVisibleRows(layout.ContentHeight - 2)
 
 	case ServiceUpdateMsg:
 		if msg.Err == nil {
@@ -243,6 +305,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
+			m.applyTiers()
 		}
 
 	case StatsUpdateMsg:
@@ -257,32 +320,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Update detail panel with latest stats
 			if svc := m.sidebar.SelectedInfo(); svc != nil {
-				m.detail = m.detail.SetService(svc, m.statsHistory)
+				m.detail = m.updateDetail(svc)
 			}
 		}
 
 	case uiTickMsg:
-		// Recompute live uptimes from startedAt timestamps
-		now := time.Now()
-		for i, svc := range m.sidebar.services {
-			if t, ok := m.startedAt[svc.Name]; ok {
-				m.sidebar.services[i].Uptime = now.Sub(t)
-			}
-		}
-		for i, svc := range m.services.services {
-			if t, ok := m.startedAt[svc.Name]; ok {
-				m.services.services[i].Uptime = now.Sub(t)
-			}
-		}
-		for i, svc := range m.services.filtered {
-			if t, ok := m.startedAt[svc.Name]; ok {
-				m.services.filtered[i].Uptime = now.Sub(t)
-			}
-		}
-		// Also update detail panel if showing a service
+		m.sidebar = m.sidebar.UpdateUptimes(m.startedAt)
+		m.services = m.services.UpdateUptimes(m.startedAt)
 		if m.detail.service != nil {
 			if t, ok := m.startedAt[m.detail.service.Name]; ok {
-				m.detail.service.Uptime = now.Sub(t)
+				m.detail.service.Uptime = time.Since(t)
 			}
 		}
 		cmds = append(cmds, uiTick())
@@ -300,24 +347,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		// Update detail model
 		if svc := m.sidebar.SelectedInfo(); svc != nil {
-			m.detail = m.detail.SetService(svc, m.statsHistory)
+			m.detail = m.updateDetail(svc)
 		}
 
 	case graphDataMsg:
 		if msg.err == nil && len(msg.tiers) > 0 {
-			tierMap := make(map[string]int)
 			for i, tier := range msg.tiers {
 				for _, name := range tier {
-					tierMap[name] = i + 1
+					m.tierMap[name] = i + 1
 				}
 			}
-			// Stamp tiers onto sidebar services
-			svcs := make([]ServiceInfo, len(m.sidebar.services))
-			copy(svcs, m.sidebar.services)
-			for i, s := range svcs {
-				svcs[i].Tier = tierMap[s.Name]
-			}
-			m.sidebar = m.sidebar.SetServices(svcs)
+			m.applyTiers()
 		}
 
 	case ToastMsg:
@@ -377,7 +417,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.describe = newDesc
 			return m, cmd
 		}
-		m = m.pushView(msg.View)
+		// ViewServices or unknown — don't push onto stack
 	}
 
 	// Forward tick/polling messages to services model (data source)
@@ -537,38 +577,6 @@ func (m Model) footer() string {
 		}
 	}
 	return styleStatusBar.Width(m.width).Render("  " + strings.Join(parts, "  "))
-}
-
-// titleBar kept for narrow-mode compatibility (not rendered in wide mode)
-func (m Model) titleBar() string {
-	var title string
-	switch m.activeView {
-	case ViewServices:
-		filter := "all"
-		if f := m.command.Filter(); f != "" {
-			filter = "/" + f
-		}
-		title = fmt.Sprintf("  Services(%s)[%d]", filter, m.services.Count())
-	case ViewLogs:
-		title = fmt.Sprintf("  Logs: %s", m.logs.ServiceName())
-	case ViewDoctor:
-		title = "  Doctor"
-	case ViewGraph:
-		title = "  Graph"
-	case ViewDescribe:
-		title = fmt.Sprintf("  Describe: %s", m.describe.ServiceName())
-	}
-	return styleTitleBar.Width(m.width).Render(title)
-}
-
-func (m Model) statusBar() string {
-	if m.command.Active() {
-		return m.command.View(m.width)
-	}
-	if msg := m.toast.Message(); msg != "" {
-		return styleStatusBar.Width(m.width).Render("  " + msg)
-	}
-	return styleStatusBar.Width(m.width).Render("  Press ? for help")
 }
 
 func (m Model) pushView(v ViewType) Model {

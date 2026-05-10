@@ -3,19 +3,36 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type SidebarModel struct {
-	services []ServiceInfo
-	cursor   int
-	offset   int
+	services    []ServiceInfo
+	cursor      int
+	offset      int
+	visibleRows int
 }
 
 func NewSidebarModel() SidebarModel {
 	return SidebarModel{}
+}
+
+func (m SidebarModel) SetVisibleRows(n int) SidebarModel {
+	m.visibleRows = n
+	return m
+}
+
+func (m SidebarModel) UpdateUptimes(startedAt map[string]time.Time) SidebarModel {
+	now := time.Now()
+	for i, svc := range m.services {
+		if t, ok := startedAt[svc.Name]; ok {
+			m.services[i].Uptime = now.Sub(t)
+		}
+	}
+	return m
 }
 
 func (m SidebarModel) SetServices(services []ServiceInfo) SidebarModel {
@@ -48,11 +65,13 @@ func (m SidebarModel) Update(msg tea.Msg) (SidebarModel, tea.Cmd) {
 		case "j", "down":
 			if m.cursor < len(m.services)-1 {
 				m.cursor++
+				m.adjustOffset()
 				return m, func() tea.Msg { return SidebarSelectionMsg{Service: m.Selected()} }
 			}
 		case "k", "up":
 			if m.cursor > 0 {
 				m.cursor--
+				m.adjustOffset()
 				return m, func() tea.Msg { return SidebarSelectionMsg{Service: m.Selected()} }
 			}
 		}
@@ -79,6 +98,19 @@ func (m SidebarModel) Update(msg tea.Msg) (SidebarModel, tea.Cmd) {
 	return m, nil
 }
 
+func (m *SidebarModel) adjustOffset() {
+	visible := m.visibleRows
+	if visible < 1 {
+		visible = 10
+	}
+	if m.cursor < m.offset {
+		m.offset = m.cursor
+	}
+	if m.cursor >= m.offset+visible {
+		m.offset = m.cursor - visible + 1
+	}
+}
+
 func (m SidebarModel) View(width, height int) string {
 	if len(m.services) == 0 {
 		return styleDim.Render("  No services")
@@ -88,14 +120,6 @@ func (m SidebarModel) View(width, height int) string {
 	visible := height - 2 // subtract header line
 	if visible < 1 {
 		visible = 1
-	}
-	// Adjust offset to keep cursor visible (note: offset is on value receiver so we use local)
-	offset := m.offset
-	if m.cursor < offset {
-		offset = m.cursor
-	}
-	if m.cursor >= offset+visible {
-		offset = m.cursor - visible + 1
 	}
 
 	var b strings.Builder
@@ -111,16 +135,26 @@ func (m SidebarModel) View(width, height int) string {
 	currentTier := -1
 	rendered := 0
 	for i, svc := range m.services {
+		if i < m.offset {
+			continue
+		}
+		if rendered >= visible {
+			break
+		}
+
 		// Tier divider
 		if svc.Tier != currentTier && svc.Tier > 0 {
 			currentTier = svc.Tier
+			if rendered >= visible {
+				break
+			}
 			divider := styleDim.Width(width).Render(fmt.Sprintf(" tier %d ", svc.Tier))
 			b.WriteString(divider + "\n")
+			rendered++
+			if rendered >= visible {
+				break
+			}
 		}
-		if i < offset || rendered >= visible {
-			continue
-		}
-		rendered++
 
 		dot, nameStyle, uptimeStr := svcStatusParts(svc)
 		name := nameStyle.Render(truncate(svc.Name, width-10))
@@ -139,6 +173,7 @@ func (m SidebarModel) View(width, height int) string {
 		} else {
 			b.WriteString(lipgloss.NewStyle().Width(width).Render(row) + "\n")
 		}
+		rendered++
 	}
 	return b.String()
 }

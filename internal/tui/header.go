@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/deveshpharswan/stackup/internal/constants"
 )
 
@@ -96,9 +97,13 @@ func (m HeaderModel) View(width int, active ViewType) string {
 	}
 	left += sep + meta
 
-	// Truncate if needed to fit within terminal width
-	if len(left) > width-2 {
-		left = left[:width-3] + "…"
+	// Truncate if needed to fit within terminal width (use visual width, not byte length)
+	if lipgloss.Width(left) > width-2 {
+		// Rebuild with fewer components for narrow terminals
+		left = logo + sep + project
+		if lipgloss.Width(left) > width-2 {
+			left = logo + sep + styleBold.Render(truncate(m.stack, width-12))
+		}
 	}
 
 	return styleHeader.Width(width).Render(left)

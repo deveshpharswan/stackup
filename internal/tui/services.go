@@ -19,6 +19,7 @@ type ServicesModel struct {
 	filtered     []ServiceInfo
 	cursor       int
 	filter       string
+	filterRe     *regexp.Regexp
 	errorZoom    bool
 	statsHistory map[string]*StatsHistory
 	err          error
@@ -189,6 +190,21 @@ func (m ServicesModel) Services() []ServiceInfo {
 	return m.services
 }
 
+func (m ServicesModel) UpdateUptimes(startedAt map[string]time.Time) ServicesModel {
+	now := time.Now()
+	for i, svc := range m.services {
+		if t, ok := startedAt[svc.Name]; ok {
+			m.services[i].Uptime = now.Sub(t)
+		}
+	}
+	for i, svc := range m.filtered {
+		if t, ok := startedAt[svc.Name]; ok {
+			m.filtered[i].Uptime = now.Sub(t)
+		}
+	}
+	return m
+}
+
 func (m ServicesModel) Selected() string {
 	if m.cursor < len(m.filtered) {
 		return m.filtered[m.cursor].Name
@@ -198,6 +214,16 @@ func (m ServicesModel) Selected() string {
 
 func (m ServicesModel) SetFilter(f string) ServicesModel {
 	m.filter = f
+	if f == "" {
+		m.filterRe = nil
+	} else {
+		re, err := regexp.Compile("(?i)" + f)
+		if err != nil {
+			m.filterRe = nil
+		} else {
+			m.filterRe = re
+		}
+	}
 	m.applyFilter()
 	m.cursor = 0
 	return m
@@ -226,18 +252,13 @@ func (m *ServicesModel) applyFilter() {
 		base = m.services
 	}
 
-	if m.filter == "" {
-		m.filtered = base
-		return
-	}
-	re, err := regexp.Compile("(?i)" + m.filter)
-	if err != nil {
+	if m.filter == "" || m.filterRe == nil {
 		m.filtered = base
 		return
 	}
 	var filtered []ServiceInfo
 	for _, s := range base {
-		if re.MatchString(s.Name) {
+		if m.filterRe.MatchString(s.Name) {
 			filtered = append(filtered, s)
 		}
 	}

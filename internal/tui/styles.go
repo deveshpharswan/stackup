@@ -27,12 +27,6 @@ var (
 			Foreground(colorWhite).
 			Padding(0, 1)
 
-	styleTitleBar = lipgloss.NewStyle().
-			Background(lipgloss.Color("#1c2128")).
-			Foreground(colorBlue).
-			Bold(true).
-			Padding(0, 1)
-
 	styleStatusBar = lipgloss.NewStyle().
 			Background(lipgloss.Color("#161b22")).
 			Foreground(colorDim).

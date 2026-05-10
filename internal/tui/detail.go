@@ -5,9 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/deveshpharswan/stackup/internal/config"
-	"github.com/deveshpharswan/stackup/internal/constants"
-	"github.com/deveshpharswan/stackup/internal/scaffold"
 )
 
 type DetailModel struct {
@@ -24,38 +21,12 @@ func NewDetailModel() DetailModel {
 func (m DetailModel) SetService(svc *ServiceInfo, history map[string]*StatsHistory) DetailModel {
 	m.service = svc
 	m.statsHistory = history
-	m.deps = nil
-	m.healthDesc = ""
+	return m
+}
 
-	if svc == nil {
-		return m
-	}
-
-	cfg, _ := config.LoadOrEmpty(constants.DefaultConfigFile)
-	if cfg != nil {
-		if svcCfg, ok := cfg.Services[svc.Name]; ok && svcCfg.Health != nil {
-			hc := svcCfg.Health
-			desc := hc.Type
-			if hc.URL != "" {
-				desc += " " + hc.URL
-			} else if hc.Host != "" {
-				desc += fmt.Sprintf(" %s:%d", hc.Host, hc.Port)
-			} else if hc.Pattern != "" {
-				desc += " \"" + hc.Pattern + "\""
-			}
-			m.healthDesc = desc
-		}
-	}
-
-	composePath := constants.FindComposeFile(".")
-	if composePath == "" {
-		composePath = constants.DefaultComposeFile
-	}
-	composeSvcs, err := scaffold.ParseServices(composePath)
-	if err == nil {
-		m.deps = composeSvcs[svc.Name]
-	}
-
+func (m DetailModel) SetServiceMeta(deps []string, healthDesc string) DetailModel {
+	m.deps = deps
+	m.healthDesc = healthDesc
 	return m
 }
 

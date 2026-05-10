@@ -22,7 +22,7 @@ func (m HelpModel) View(width, height int, active ViewType) string {
 		bindings = [][]string{
 			{"↑/k", "Move up"},
 			{"↓/j", "Move down"},
-			{"enter", "Describe service"},
+			{"enter", "View logs"},
 			{"l", "View logs"},
 			{"r", "Restart service"},
 			{"s", "Shell into container"},
