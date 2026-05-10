@@ -113,9 +113,10 @@ func (c *Client) ExecShell(ctx context.Context, containerID string, in io.Reader
 		}
 		resp, err := c.cli.ContainerExecAttach(ctx, exec.ID, container.ExecAttachOptions{Tty: true})
 		if err != nil {
+			// exec object created but attach failed — exec will be cleaned up
+			// when the container is removed (Docker API has no ExecRemove endpoint).
 			continue
 		}
-		defer resp.Close()
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
@@ -123,6 +124,10 @@ func (c *Client) ExecShell(ctx context.Context, containerID string, in io.Reader
 			_, _ = io.Copy(resp.Conn, in)
 		}()
 		_, _ = io.Copy(out, resp.Reader)
+		// Close the connection to unblock the stdin goroutine. Without this,
+		// wg.Wait() would block forever after the container process exits
+		// because io.Copy(resp.Conn, in) is still waiting on terminal input.
+		_ = resp.Conn.Close()
 		wg.Wait()
 		return nil
 	}
