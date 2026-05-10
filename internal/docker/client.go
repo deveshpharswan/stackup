@@ -9,6 +9,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/pkg/stdcopy"
 	dockerclient "github.com/docker/docker/client"
 )
 
@@ -72,7 +73,7 @@ func (c *Client) TailLogs(ctx context.Context, containerID string, lines int, w 
 		return err
 	}
 	defer rc.Close()
-	_, err = io.Copy(w, rc)
+	_, err = stdcopy.StdCopy(w, w, rc)
 	return err
 }
 
@@ -88,7 +89,7 @@ func (c *Client) Logs(ctx context.Context, containerID string, follow bool, w io
 		return err
 	}
 	defer rc.Close()
-	_, err = io.Copy(w, rc)
+	_, err = stdcopy.StdCopy(w, w, rc)
 	return err
 }
 
