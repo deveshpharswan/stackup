@@ -110,12 +110,13 @@ func (m LogsModel) ActivateFilter() (LogsModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m *LogsModel) Stop() {
+func (m LogsModel) Stop() LogsModel {
 	if m.cancel != nil {
 		m.cancel()
 		m.cancel = nil
 	}
 	m.logCh = nil
+	return m
 }
 
 func startLogStream(ctx context.Context, service string) <-chan string {

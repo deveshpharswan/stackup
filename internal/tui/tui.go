@@ -31,6 +31,7 @@ type Model struct {
 
 	activeTab TabType
 
+	dc           *dockerclient.Client
 	services     ServicesModel            // data source: polling + filter state
 	sidebar      SidebarModel
 	detail       DetailModel
@@ -55,6 +56,7 @@ type Model struct {
 func NewModel(dc *dockerclient.Client) Model {
 	return Model{
 		activeTab:    TabServices,
+		dc:           dc,
 		services:     NewServicesModel(dc),
 		sidebar:      NewSidebarModel(),
 		detail:       NewDetailModel(),
@@ -127,7 +129,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "esc":
 			if m.activeTab == TabLogs {
-				m.logs.Stop()
+				m.logs = m.logs.Stop()
 			}
 			m.activeTab = TabServices
 			return m, nil
@@ -137,7 +139,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "2":
 			m.activeTab = TabLogs
 			if svc := m.sidebar.Selected(); svc != "" {
-				m.logs.Stop()
+				m.logs = m.logs.Stop()
 				newLogs, cmd := m.logs.Start(svc, m.width, m.height-headerLines-footerLines)
 				m.logs = newLogs
 				return m, cmd
@@ -207,12 +209,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SidebarSelectionMsg:
 		// Update log tail for new selection
-		m.logTail.Stop()
-		newLogTail, cmd := m.logTail.Start(msg.Service, rightWidth, m.height-headerLines-footerLines)
+		m.logTail = m.logTail.Stop()
+		layout := ComputeLayout(m.width, m.height)
+		newLogTail, cmd := m.logTail.Start(msg.Service, layout.RightWidth, layout.ContentHeight)
 		m.logTail = newLogTail
 		cmds = append(cmds, cmd)
 		// Trigger inspect fetch
-		cmds = append(cmds, fetchInspect(msg.Service))
+		cmds = append(cmds, fetchInspect(m.dc, msg.Service))
 		// Update detail for new service
 		if svc := m.sidebar.SelectedInfo(); svc != nil {
 			m.detail = m.detail.SetService(*svc, m.sidebar.services, m.statsHistory)
@@ -316,9 +319,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.doctor = newDoc
 		cmds = append(cmds, cmd)
 	case TabGraph:
-		newGraph, cmd := m.graph.Update(msg)
-		m.graph = newGraph
-		cmds = append(cmds, cmd)
+		switch msg.(type) {
+		case graphDataMsg:
+			// already handled above
+		default:
+			newGraph, cmd := m.graph.Update(msg)
+			m.graph = newGraph
+			cmds = append(cmds, cmd)
+		}
 	}
 
 	newHeader, cmd := m.header.Update(msg)
@@ -429,6 +437,9 @@ func (m Model) renderServicesTab(layout PanelLayout) string {
 	if layout.HasSidebar {
 		return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, centerPanel)
 	}
+	if layout.HasRight {
+		return lipgloss.JoinHorizontal(lipgloss.Top, centerPanel, rightPanel)
+	}
 	return centerPanel
 }
 
@@ -462,7 +473,7 @@ func (m Model) renderFooter() string {
 	return styleStatusBar.Width(m.width).Render("  " + strings.Join(parts, styleDim.Render("  ")))
 }
 
-func fetchInspect(service string) tea.Cmd {
+func fetchInspect(dc *dockerclient.Client, service string) tea.Cmd {
 	return func() tea.Msg {
 		out, err := exec.Command("docker", "compose", "ps", "-q", service).Output()
 		if err != nil || len(strings.TrimSpace(string(out))) == 0 {
@@ -473,11 +484,9 @@ func fetchInspect(service string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		dc, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
-		if err != nil {
-			return InspectResultMsg{Service: service, Err: err}
+		if dc == nil {
+			return InspectResultMsg{Service: service, Err: fmt.Errorf("docker client unavailable")}
 		}
-		defer dc.Close()
 
 		info, err := dc.ContainerInspect(ctx, containerID)
 		if err != nil {

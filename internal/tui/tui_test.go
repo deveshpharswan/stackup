@@ -47,6 +47,15 @@ func TestModel_QuitOnQ(t *testing.T) {
 	model := newModel.(Model)
 	assert.True(t, model.quitting)
 	assert.NotNil(t, cmd)
+
+	// q should NOT quit when not on TabServices
+	m2 := NewModel(nil)
+	m2.width = 100
+	m2.height = 30
+	m2.activeTab = TabLogs
+	newModel2, _ := m2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	model2 := newModel2.(Model)
+	assert.False(t, model2.quitting, "q should not quit on non-Services tab")
 }
 
 func TestModel_HelpToggle(t *testing.T) {
