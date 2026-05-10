@@ -136,7 +136,7 @@ services:
     ports:
       - "18085:80"
 EOF
-(cd "$D" && run_test "validate passes with no schema (nothing to validate)" nonzero validate)
+(cd "$D" && run_test "validate passes with no schema (nothing to validate)" 0 validate)
 
 D=$(mktemp -d "$TMPROOT/env-XXXX")
 cat >"$D/compose.yaml" <<'EOF'
