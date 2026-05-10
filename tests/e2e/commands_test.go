@@ -57,12 +57,10 @@ func TestCommands_DoctorRuns(t *testing.T) {
 	dir := copyFixture(t, "simple-stack")
 
 	result := runCLI(t, dir, "doctor")
-	// Doctor always exits 0 (it prints findings, doesn't fail).
 	if result.ExitCode != 0 {
-		t.Logf("doctor exited %d (may be expected on some systems)\nstdout: %s\nstderr: %s",
+		t.Fatalf("expected exit 0 for doctor, got %d\nstdout: %s\nstderr: %s",
 			result.ExitCode, result.Stdout, result.Stderr)
 	}
-	// Just verify it produced some output.
 	if result.Stdout == "" && result.Stderr == "" {
 		t.Error("expected doctor to produce some output")
 	}
@@ -72,6 +70,7 @@ func TestCommands_DoctorRuns(t *testing.T) {
 func TestCommands_DownStopsContainers(t *testing.T) {
 	skipIfNoDocker(t)
 	dir := copyFixture(t, "simple-stack")
+	t.Cleanup(func() { cleanupContainers(t, dir) })
 
 	// Start containers first.
 	upResult := runCLI(t, dir, "up")
