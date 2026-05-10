@@ -36,6 +36,9 @@ func newStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show health status of all services",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if output != "text" && output != "json" {
+				return fmt.Errorf("unknown output format %q — must be text or json", output)
+			}
 			if watch && output == "json" {
 				return fmt.Errorf("--watch and --output json cannot be used together")
 			}

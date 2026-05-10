@@ -33,8 +33,7 @@ func (c *Client) Close() error { return c.cli.Close() }
 func (c *Client) Raw() *dockerclient.Client { return c.cli }
 
 // ContainerIDByName finds a running container by its compose service label.
-func (c *Client) ContainerIDByName(serviceName string) (string, error) {
-	ctx := context.Background()
+func (c *Client) ContainerIDByName(ctx context.Context, serviceName string) (string, error) {
 	f := filters.NewArgs(filters.Arg("label", "com.docker.compose.service="+serviceName))
 	list, err := c.cli.ContainerList(ctx, container.ListOptions{Filters: f})
 	if err != nil {

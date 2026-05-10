@@ -46,6 +46,9 @@ func newCheckCmd() *cobra.Command {
 		Use:   "check",
 		Short: "Check health of services (CI-friendly, exits 0=healthy, 2=unhealthy)",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if format != "text" && format != "json" {
+				return fmt.Errorf("unknown output format %q — must be text or json", format)
+			}
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer cancel()
 			cfg := config.LoadOrEmpty(constants.DefaultConfigFile)
@@ -111,7 +114,9 @@ func newCheckCmd() *cobra.Command {
 			case "json":
 				enc := json.NewEncoder(w)
 				enc.SetIndent("", "  ")
-				_ = enc.Encode(result)
+				if err := enc.Encode(result); err != nil {
+					return err
+				}
 			default:
 				if !quiet {
 					for _, s := range result.Services {

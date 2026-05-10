@@ -101,7 +101,7 @@ func (o *Onboarder) Run(envFile, exampleFile string) error {
 	for _, k := range keys {
 		sb.WriteString(fmt.Sprintf("%s=%s\n", k, values[k]))
 	}
-	if err := os.WriteFile(envFile, []byte(sb.String()), 0644); err != nil {
+	if err := os.WriteFile(envFile, []byte(sb.String()), 0600); err != nil {
 		return fmt.Errorf("writing .env: %w", err)
 	}
 

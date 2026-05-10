@@ -22,7 +22,7 @@ func newShellCmd() *cobra.Command {
 				return err
 			}
 			defer c.Close()
-			id, err := c.ContainerIDByName(args[0])
+			id, err := c.ContainerIDByName(context.Background(), args[0])
 			if err != nil {
 				return err
 			}

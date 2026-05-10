@@ -20,7 +20,7 @@ import (
 // LogFetcher abstracts container log retrieval for failure diagnostics.
 type LogFetcher interface {
 	TailLogs(ctx context.Context, containerID string, lines int, w io.Writer) error
-	ContainerIDByName(serviceName string) (string, error)
+	ContainerIDByName(ctx context.Context, serviceName string) (string, error)
 }
 
 // Orchestrator manages the startup sequence and health checking of services.
@@ -205,7 +205,7 @@ func (o *Orchestrator) surfaceLogs(ctx context.Context, svc string, fetcher LogF
 	if fetcher == nil {
 		return
 	}
-	containerID, err := fetcher.ContainerIDByName(svc)
+	containerID, err := fetcher.ContainerIDByName(ctx, svc)
 	if err != nil {
 		return
 	}

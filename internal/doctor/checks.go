@@ -15,6 +15,7 @@ import (
 )
 
 // CheckPortConflicts verifies that ports configured in stackup.yml health checks are available.
+// Ports already held by a running compose service are skipped — that is expected, not a conflict.
 func CheckPortConflicts(ctx context.Context, opts *Options) []Finding {
 	var findings []Finding
 
@@ -24,8 +25,14 @@ func CheckPortConflicts(ctx context.Context, opts *Options) []Finding {
 		return nil
 	}
 
+	running := runningComposeServices(ctx, opts.ComposeFile)
+
 	for name, svc := range cfg.Services {
 		if svc.Health == nil || svc.Health.Port == 0 {
+			continue
+		}
+		// If the service itself is already running it holds the port — not a conflict.
+		if running[name] {
 			continue
 		}
 		addr := fmt.Sprintf(":%d", svc.Health.Port)
@@ -47,6 +54,30 @@ func CheckPortConflicts(ctx context.Context, opts *Options) []Finding {
 		}
 	}
 	return findings
+}
+
+// runningComposeServices returns a set of compose service names that are currently running.
+func runningComposeServices(ctx context.Context, composeFile string) map[string]bool {
+	args := []string{"compose"}
+	if composeFile != "" {
+		args = append(args, "-f", composeFile)
+	}
+	args = append(args, "ps", "--format", "{{.Service}}\t{{.State}}")
+
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	running := make(map[string]bool)
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	for scanner.Scan() {
+		parts := strings.SplitN(scanner.Text(), "\t", 2)
+		if len(parts) == 2 && strings.ToLower(strings.TrimSpace(parts[1])) == "running" {
+			running[strings.TrimSpace(parts[0])] = true
+		}
+	}
+	return running
 }
 
 // CheckCrashLoops detects services stuck in restarting or exited state.

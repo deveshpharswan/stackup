@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/docker/docker/client"
 	"github.com/spf13/cobra"
 	"github.com/deveshpharswan/stackup/internal/config"
 	"github.com/deveshpharswan/stackup/internal/constants"
@@ -27,7 +26,7 @@ func newRestartCmd() *cobra.Command {
 				return err
 			}
 			defer c.Close()
-			id, err := c.ContainerIDByName(svcName)
+			id, err := c.ContainerIDByName(ctx, svcName)
 			if err != nil {
 				return err
 			}
@@ -41,13 +40,7 @@ func newRestartCmd() *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s restarted\n", svcName)
 				return nil
 			}
-			dc, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-			if err != nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s restarted (skipped health check)\n", svcName)
-				return nil
-			}
-			defer dc.Close()
-			checkers := buildCheckers(cfg, dc)
+			checkers := buildCheckers(cfg, c.Raw())
 			named, ok := checkers[svcName]
 			if !ok {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s restarted\n", svcName)

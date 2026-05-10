@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"strings"
 
 	"github.com/deveshpharswan/stackup/internal/config"
 )
@@ -38,8 +37,7 @@ func (e *Executor) RunAfterStart(ctx context.Context, parentService string, acti
 
 		fmt.Fprintf(e.w, "    → hook: %s\n", name)
 
-		parts := strings.Fields(action.Run)
-		cmdArgs := append([]string{"compose", "exec", "-T", target}, parts...)
+		cmdArgs := []string{"compose", "exec", "-T", target, "sh", "-c", action.Run}
 		cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
 		cmd.Stdout = e.w
 		cmd.Stderr = e.w

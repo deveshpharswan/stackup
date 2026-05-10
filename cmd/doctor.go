@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/spf13/cobra"
 	"github.com/deveshpharswan/stackup/internal/constants"
@@ -36,6 +37,9 @@ func newDoctorCmd() *cobra.Command {
 		Short: "Run automated diagnostics on your stack",
 		Long:  "Checks for port conflicts, crash loops, env drift, container status, and localhost misuse.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if output != "text" && output != "json" {
+				return fmt.Errorf("unknown output format %q — must be text or json", output)
+			}
 			opts := &doctor.Options{
 				ComposeFile: constants.DefaultComposeFile,
 				EnvFile:     constants.DefaultEnvFile,

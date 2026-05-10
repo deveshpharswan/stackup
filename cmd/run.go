@@ -1,15 +1,14 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/deveshpharswan/stackup/internal/config"
 	"github.com/deveshpharswan/stackup/internal/constants"
-	"github.com/deveshpharswan/stackup/internal/docker"
 )
 
 func newRunCmd() *cobra.Command {
@@ -30,16 +29,10 @@ func newRunCmd() *cobra.Command {
 				}
 				return fmt.Errorf("unknown command %q — available: %s", args[0], strings.Join(keys, ", "))
 			}
-			c, err := docker.NewClient()
-			if err != nil {
-				return err
-			}
-			defer c.Close()
-			id, err := c.ContainerIDByName(named.Service)
-			if err != nil {
-				return err
-			}
-			return c.ExecShell(context.Background(), id, strings.NewReader(named.Run+"\n"), os.Stdout)
+			c := exec.Command("docker", "compose", "exec", "-T", named.Service, "sh", "-c", named.Run)
+			c.Stdout = os.Stdout
+			c.Stderr = os.Stderr
+			return c.Run()
 		},
 	}
 }

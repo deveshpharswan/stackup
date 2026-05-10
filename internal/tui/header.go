@@ -92,7 +92,7 @@ func shortcutsForView(v ViewType) string {
 			styleInfo.Render("<?>") + " Help     " + styleInfo.Render("<r>") + " Restart",
 			styleInfo.Render("<l>") + " Logs     " + styleInfo.Render("<s>") + " Shell",
 			styleInfo.Render("<d>") + " Doctor   " + styleInfo.Render("<x>") + " Stop",
-			styleInfo.Render("<g>") + " Graph    " + styleInfo.Render("</>") + " Filter",
+			styleInfo.Render("<g>") + " Graph    " + styleInfo.Render("<e>") + " Err zoom",
 			styleInfo.Render("<:>") + " Command  " + styleInfo.Render("<q>") + " Quit",
 		}, "\n")
 	case ViewLogs:
@@ -121,8 +121,12 @@ func shortcutsForView(v ViewType) string {
 }
 
 func formatUptime(d time.Duration) string {
-	m := int(d.Minutes())
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
 	s := int(d.Seconds()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh %02dm", h, m)
+	}
 	return fmt.Sprintf("%dm %02ds", m, s)
 }
 

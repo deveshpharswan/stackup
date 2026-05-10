@@ -24,7 +24,7 @@ func newLogsCmd() *cobra.Command {
 				return err
 			}
 			defer c.Close()
-			id, err := c.ContainerIDByName(args[0])
+			id, err := c.ContainerIDByName(context.Background(), args[0])
 			if err != nil {
 				return fmt.Errorf("service %q not found: %w", args[0], err)
 			}

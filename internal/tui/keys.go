@@ -3,35 +3,37 @@ package tui
 import "github.com/charmbracelet/bubbles/key"
 
 type ServicesKeyMap struct {
-	Up      key.Binding
-	Down    key.Binding
-	Restart key.Binding
-	Shell   key.Binding
-	Logs    key.Binding
-	Delete  key.Binding
-	Desc    key.Binding
-	Doctor  key.Binding
-	Graph   key.Binding
-	Filter  key.Binding
-	Command key.Binding
-	Help    key.Binding
-	Quit    key.Binding
+	Up         key.Binding
+	Down       key.Binding
+	Restart    key.Binding
+	Shell      key.Binding
+	Logs       key.Binding
+	Delete     key.Binding
+	Desc       key.Binding
+	Doctor     key.Binding
+	Graph      key.Binding
+	ErrorZoom  key.Binding
+	Filter     key.Binding
+	Command    key.Binding
+	Help       key.Binding
+	Quit       key.Binding
 }
 
 var ServicesKeys = ServicesKeyMap{
-	Up:      key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
-	Down:    key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-	Restart: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "restart")),
-	Shell:   key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "shell")),
-	Logs:    key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "logs")),
-	Delete:  key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "stop")),
-	Desc:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "describe")),
-	Doctor:  key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "doctor")),
-	Graph:   key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "graph")),
-	Filter:  key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
-	Command: key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "command")),
-	Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-	Quit:    key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	Up:        key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
+	Down:      key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
+	Restart:   key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "restart")),
+	Shell:     key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "shell")),
+	Logs:      key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "logs")),
+	Delete:    key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "stop")),
+	Desc:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "describe")),
+	Doctor:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "doctor")),
+	Graph:     key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "graph")),
+	ErrorZoom: key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "error zoom")),
+	Filter:    key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+	Command:   key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "command")),
+	Help:      key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+	Quit:      key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
 }
 
 type LogsKeyMap struct {

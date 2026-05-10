@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type LogsModel struct {
@@ -65,6 +66,7 @@ func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 			m.viewport.SetContent(m.renderLines())
 		case "w":
 			m.wrap = !m.wrap
+			m.viewport.SetContent(m.renderLines())
 		case "c":
 			m.lines = nil
 			m.viewport.SetContent("")
@@ -149,6 +151,9 @@ func (m LogsModel) renderLines() string {
 			display = stripTimestamp(display)
 		}
 		rendered := m.colorLogLine(display)
+		if m.wrap && m.viewport.Width > 0 {
+			rendered = lipgloss.NewStyle().Width(m.viewport.Width).Render(rendered)
+		}
 		b.WriteString(rendered + "\n")
 	}
 	return b.String()

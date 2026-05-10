@@ -24,7 +24,7 @@ func TestClient_ContainerIDByName_NotFound(t *testing.T) {
 		t.Skip("Docker daemon not available:", err)
 	}
 	defer c.Close()
-	_, err = c.ContainerIDByName("stackup-nonexistent-xyz")
+	_, err = c.ContainerIDByName(context.Background(), "stackup-nonexistent-xyz")
 	assert.Error(t, err)
 }
 

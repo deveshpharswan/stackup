@@ -11,10 +11,7 @@ import (
 )
 
 func TestValidateCommand_MissingEnv(t *testing.T) {
-	dir := t.TempDir()
-	origDir, _ := os.Getwd()
-	os.Chdir(dir)
-	t.Cleanup(func() { os.Chdir(origDir) })
+	t.Chdir(t.TempDir())
 
 	buf := new(bytes.Buffer)
 	root := cmd.NewRootCmd("0.0.0", "test", "now")
@@ -29,9 +26,7 @@ func TestValidateCommand_MissingEnv(t *testing.T) {
 
 func TestValidateCommand_Valid(t *testing.T) {
 	dir := t.TempDir()
-	origDir, _ := os.Getwd()
-	os.Chdir(dir)
-	t.Cleanup(func() { os.Chdir(origDir) })
+	t.Chdir(dir)
 
 	// Create a .env file with a variable
 	os.WriteFile(filepath.Join(dir, ".env"), []byte("FOO=bar\nBAZ=qux\n"), 0644)
@@ -49,9 +44,7 @@ func TestValidateCommand_Valid(t *testing.T) {
 
 func TestInitCommand_GeneratesConfig(t *testing.T) {
 	dir := t.TempDir()
-	origDir, _ := os.Getwd()
-	os.Chdir(dir)
-	t.Cleanup(func() { os.Chdir(origDir) })
+	t.Chdir(dir)
 
 	// Create a minimal docker-compose.yml
 	compose := "version: '3'\nservices:\n  redis:\n    image: redis:7\n  api:\n    image: myapp:latest\n"
@@ -75,9 +68,7 @@ func TestInitCommand_GeneratesConfig(t *testing.T) {
 
 func TestInitCommand_WontOverwrite(t *testing.T) {
 	dir := t.TempDir()
-	origDir, _ := os.Getwd()
-	os.Chdir(dir)
-	t.Cleanup(func() { os.Chdir(origDir) })
+	t.Chdir(dir)
 
 	// Create a docker-compose.yml so init has something to work with
 	compose := "version: '3'\nservices:\n  app:\n    image: node:20\n"
@@ -98,9 +89,7 @@ func TestInitCommand_WontOverwrite(t *testing.T) {
 
 func TestCheckCommand_NoDocker(t *testing.T) {
 	dir := t.TempDir()
-	origDir, _ := os.Getwd()
-	os.Chdir(dir)
-	t.Cleanup(func() { os.Chdir(origDir) })
+	t.Chdir(dir)
 
 	// Force Docker client to fail by pointing to a non-existent host
 	origHost := os.Getenv("DOCKER_HOST")
@@ -128,10 +117,7 @@ func TestCheckCommand_NoDocker(t *testing.T) {
 }
 
 func TestDoctorCommand_Runs(t *testing.T) {
-	dir := t.TempDir()
-	origDir, _ := os.Getwd()
-	os.Chdir(dir)
-	t.Cleanup(func() { os.Chdir(origDir) })
+	t.Chdir(t.TempDir())
 
 	buf := new(bytes.Buffer)
 	root := cmd.NewRootCmd("0.0.0", "test", "now")

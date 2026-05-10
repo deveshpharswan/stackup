@@ -60,6 +60,9 @@ func validateAsJSON(cmd *cobra.Command, cfg *config.Config) error {
 		Valid:    result.Valid(),
 		Injected: injected,
 	}
+	if out.Injected == nil {
+		out.Injected = map[string]string{}
+	}
 	for _, e := range result.Errors {
 		out.Errors = append(out.Errors, validateErr{Key: e.Key, Message: e.Message})
 	}
