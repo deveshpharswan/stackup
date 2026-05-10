@@ -31,6 +31,15 @@ func BuildTiers(deps map[string][]string) ([]Tier, error) {
 		}
 	}
 
+	// Validate that every listed dependency is itself a declared service.
+	for svc, depList := range deps {
+		for _, dep := range depList {
+			if _, ok := deps[dep]; !ok {
+				return nil, fmt.Errorf("service %q depends on %q which is not declared", svc, dep)
+			}
+		}
+	}
+
 	total := len(inDegree)
 	var tiers []Tier
 	processed := 0

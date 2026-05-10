@@ -101,3 +101,13 @@ func TestBuildTiers_LargeGraph(t *testing.T) {
 	assert.Len(t, tiers, 10)
 	assert.Len(t, tiers[0], 10)
 }
+
+func TestBuildTiers_UnknownDependency(t *testing.T) {
+	t.Parallel()
+	deps := map[string][]string{
+		"api": {"postgress"}, // typo — "postgress" is not a declared service
+	}
+	_, err := orchestrator.BuildTiers(deps)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "postgress")
+}
