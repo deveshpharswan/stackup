@@ -20,6 +20,7 @@ type LogsModel struct {
 	timestamps bool
 	wrap       bool
 	ready      bool
+	filtering  bool // stub field for in-log filter (Task 11)
 }
 
 func NewLogsModel() LogsModel {
@@ -102,6 +103,12 @@ func (m LogsModel) View(width, height int) string {
 }
 
 func (m LogsModel) ServiceName() string { return m.service }
+
+// ActivateFilter enables the in-log filter mode (stub — full implementation in Task 11).
+func (m LogsModel) ActivateFilter() (LogsModel, tea.Cmd) {
+	m.filtering = true
+	return m, nil
+}
 
 func (m *LogsModel) Stop() {
 	if m.cancel != nil {

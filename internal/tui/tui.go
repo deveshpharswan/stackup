@@ -1,15 +1,20 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	dockerclient "github.com/docker/docker/client"
 )
 
+// ViewType is retained for backward-compatibility with help.go and command.go.
 type ViewType int
 
 const (
@@ -24,14 +29,17 @@ type Model struct {
 	width  int
 	height int
 
-	activeView ViewType
-	viewStack  []ViewType
+	activeTab TabType
 
-	services ServicesModel
-	logs     LogsModel
-	doctor   DoctorViewModel
-	graph    GraphModel
-	describe DescribeModel
+	services     ServicesModel            // data source: polling + filter state
+	sidebar      SidebarModel
+	detail       DetailModel
+	logTail      LogsModel                // right panel live log tail
+	logs         LogsModel                // tab 2 full-screen logs
+	doctor       DoctorViewModel
+	graph        GraphModel
+	progress     ProgressModel
+	statsHistory map[string]*StatsHistory // updated from StatsUpdateMsg
 
 	header  HeaderModel
 	command CommandModel
@@ -41,29 +49,32 @@ type Model struct {
 
 	showHelp    bool
 	showConfirm bool
-
-	quitting bool
+	quitting    bool
 }
 
 func NewModel(dc *dockerclient.Client) Model {
 	return Model{
-		activeView: ViewServices,
-		viewStack:  []ViewType{ViewServices},
-		services:   NewServicesModel(dc),
-		logs:       NewLogsModel(),
-		doctor:     NewDoctorViewModel(),
-		graph:      NewGraphModel(),
-		describe:   NewDescribeModel(),
-		header:     NewHeaderModel(),
-		command:    NewCommandModel(),
-		toast:      NewToastModel(),
-		help:       NewHelpModel(),
-		confirm:    NewConfirmModel(),
+		activeTab:    TabServices,
+		services:     NewServicesModel(dc),
+		sidebar:      NewSidebarModel(),
+		detail:       NewDetailModel(),
+		doctor:       NewDoctorViewModel(),
+		graph:        NewGraphModel(),
+		progress:     NewProgressModel(),
+		statsHistory: make(map[string]*StatsHistory),
+		header:       NewHeaderModel(),
+		command:      NewCommandModel(),
+		toast:        NewToastModel(),
+		help:         NewHelpModel(),
+		confirm:      NewConfirmModel(),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.services.Init()
+	return tea.Batch(
+		m.services.Init(),
+		m.graph.Init(), // loads tier data via graphDataMsg
+	)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -90,6 +101,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newCmd, cmd := m.command.Update(msg)
 			m.command = newCmd
 			m.services = m.services.SetFilter(m.command.Filter())
+			m.sidebar = m.sidebar.SetServices(m.services.filtered)
 			cmds = append(cmds, cmd)
 			return m, tea.Batch(cmds...)
 		}
@@ -97,57 +109,59 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			m.showHelp = true
 			return m, nil
+		case "/":
+			if m.activeTab == TabLogs {
+				newLogs, cmd := m.logs.ActivateFilter()
+				m.logs = newLogs
+				return m, cmd
+			}
+			m.command.Activate(ModeFilter)
+			return m, nil
 		case ":":
 			m.command.Activate(ModeCommand)
 			return m, nil
-		case "/":
-			m.command.Activate(ModeFilter)
-			return m, nil
 		case "q":
-			if m.activeView == ViewServices {
+			if m.activeTab == TabServices {
 				m.quitting = true
 				return m, tea.Quit
 			}
 		case "esc":
-			if m.activeView == ViewLogs {
+			if m.activeTab == TabLogs {
 				m.logs.Stop()
 			}
-			m = m.popView()
+			m.activeTab = TabServices
 			return m, nil
+		case "1":
+			m.activeTab = TabServices
+			return m, nil
+		case "2":
+			m.activeTab = TabLogs
+			if svc := m.sidebar.Selected(); svc != "" {
+				m.logs.Stop()
+				newLogs, cmd := m.logs.Start(svc, m.width, m.height-headerLines-footerLines)
+				m.logs = newLogs
+				return m, cmd
+			}
+			return m, nil
+		case "3":
+			m.activeTab = TabStats
+			return m, nil
+		case "4":
+			m.activeTab = TabDoctor
+			return m, m.doctor.Init()
+		case "5":
+			m.activeTab = TabGraph
+			return m, m.graph.Init()
 		case "d":
-			if m.activeView == ViewServices {
-				m = m.pushView(ViewDoctor)
-				return m, m.doctor.Init()
-			}
-		case "l":
-			if m.activeView == ViewServices {
-				if svc := m.services.Selected(); svc != "" {
-					m.logs.Stop()
-					m = m.pushView(ViewLogs)
-					newLogs, cmd := m.logs.Start(svc, m.width, m.height-7)
-					m.logs = newLogs
-					return m, cmd
-				}
-			}
+			m.activeTab = TabDoctor
+			return m, m.doctor.Init()
 		case "g":
-			if m.activeView == ViewServices {
-				m = m.pushView(ViewGraph)
-				return m, m.graph.Init()
-			}
-		case "e":
-			if m.activeView == ViewServices {
-				m.services = m.services.ToggleErrorZoom()
-				return m, nil
-			}
-		case "enter":
-			if m.activeView == ViewServices {
-				if svc := m.services.Selected(); svc != "" {
-					m = m.pushView(ViewDescribe)
-					newDesc, cmd := m.describe.Start(svc, m.services.Services(), m.width, m.height-7)
-					m.describe = newDesc
-					return m, cmd
-				}
-			}
+			m.activeTab = TabGraph
+			return m, m.graph.Init()
+		case "D":
+			m.confirm = m.confirm.Request(ConfirmStackDown, "")
+			m.showConfirm = true
+			return m, nil
 		}
 
 	case tea.WindowSizeMsg:
@@ -161,7 +175,73 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				names[i] = s.Name
 			}
 			m.command.SetServiceNames(names)
+
+			// Update sidebar
+			newSidebar, cmd := m.sidebar.Update(msg)
+			m.sidebar = newSidebar
+			cmds = append(cmds, cmd)
+
+			// Update detail with selected service data
+			if svc := m.sidebar.SelectedInfo(); svc != nil {
+				m.detail = m.detail.SetService(*svc, msg.Services, m.statsHistory)
+			}
+
+			m.progress = m.progress.Update(msg.Services)
 		}
+
+	case StatsUpdateMsg:
+		if msg.Stats != nil {
+			for name, s := range msg.Stats {
+				h, ok := m.statsHistory[name]
+				if !ok {
+					h = &StatsHistory{}
+					m.statsHistory[name] = h
+				}
+				h.Push(s.CPU, s.Memory)
+			}
+			// Refresh detail panel sparklines
+			if svc := m.sidebar.SelectedInfo(); svc != nil {
+				m.detail = m.detail.SetService(*svc, m.sidebar.services, m.statsHistory)
+			}
+		}
+
+	case SidebarSelectionMsg:
+		// Update log tail for new selection
+		m.logTail.Stop()
+		newLogTail, cmd := m.logTail.Start(msg.Service, rightWidth, m.height-headerLines-footerLines)
+		m.logTail = newLogTail
+		cmds = append(cmds, cmd)
+		// Trigger inspect fetch
+		cmds = append(cmds, fetchInspect(msg.Service))
+		// Update detail for new service
+		if svc := m.sidebar.SelectedInfo(); svc != nil {
+			m.detail = m.detail.SetService(*svc, m.sidebar.services, m.statsHistory)
+		}
+
+	case InspectResultMsg:
+		newDetail, cmd := m.detail.Update(msg)
+		m.detail = newDetail
+		cmds = append(cmds, cmd)
+
+	case graphDataMsg:
+		if msg.err == nil {
+			// Build name->tier map and stamp tiers onto sidebar services
+			tierMap := make(map[string]int)
+			for i, tier := range msg.tiers {
+				for _, name := range tier {
+					tierMap[name] = i + 1
+				}
+			}
+			services := make([]ServiceInfo, len(m.sidebar.services))
+			copy(services, m.sidebar.services)
+			for i, s := range services {
+				services[i].Tier = tierMap[s.Name]
+			}
+			m.sidebar = m.sidebar.SetServices(services)
+		}
+		newGraph, cmd := m.graph.Update(msg)
+		m.graph = newGraph
+		cmds = append(cmds, cmd)
 
 	case ToastMsg:
 		m.toast = m.toast.Show(msg.Text)
@@ -181,6 +261,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, restartService(msg.Service)
 		case ConfirmDelete:
 			return m, stopService(msg.Service)
+		case ConfirmStackDown:
+			return m, downStack()
 		}
 
 	case ActionResultMsg:
@@ -199,30 +281,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		}
-		if msg.View == ViewLogs && msg.Arg != "" {
-			m.logs.Stop()
-			m = m.pushView(ViewLogs)
-			newLogs, cmd := m.logs.Start(msg.Arg, m.width, m.height-7)
-			m.logs = newLogs
-			return m, cmd
-		}
-		if msg.View == ViewDoctor {
-			m = m.pushView(ViewDoctor)
-			return m, m.doctor.Init()
-		}
-		if msg.View == ViewGraph {
-			m = m.pushView(ViewGraph)
-			return m, m.graph.Init()
-		}
-		if msg.View == ViewDescribe && msg.Arg != "" {
-			m = m.pushView(ViewDescribe)
-			newDesc, cmd := m.describe.Start(msg.Arg, m.services.Services(), m.width, m.height-7)
-			m.describe = newDesc
-			return m, cmd
-		}
-		m = m.pushView(msg.View)
 	}
 
+	// Route polling messages to services model always
 	switch msg.(type) {
 	case TickMsg, ServiceUpdateMsg, StatsUpdateMsg, statsTickMsg:
 		newSvc, cmd := m.services.Update(msg)
@@ -230,30 +291,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	switch m.activeView {
-	case ViewServices:
+	// Route key messages and others to active tab
+	switch m.activeTab {
+	case TabServices:
 		switch msg.(type) {
 		case TickMsg, ServiceUpdateMsg, StatsUpdateMsg, statsTickMsg:
-		default:
-			newSvc, cmd := m.services.Update(msg)
-			m.services = newSvc
+			// already handled above
+		case tea.KeyMsg:
+			// Handle sidebar navigation
+			newSidebar, cmd := m.sidebar.Update(msg)
+			m.sidebar = newSidebar
 			cmds = append(cmds, cmd)
+			// Handle detail sub-tab navigation
+			newDetail, cmd2 := m.detail.Update(msg)
+			m.detail = newDetail
+			cmds = append(cmds, cmd2)
 		}
-	case ViewLogs:
+	case TabLogs:
 		newLogs, cmd := m.logs.Update(msg)
 		m.logs = newLogs
 		cmds = append(cmds, cmd)
-	case ViewDoctor:
+	case TabDoctor:
 		newDoc, cmd := m.doctor.Update(msg)
 		m.doctor = newDoc
 		cmds = append(cmds, cmd)
-	case ViewGraph:
+	case TabGraph:
 		newGraph, cmd := m.graph.Update(msg)
 		m.graph = newGraph
-		cmds = append(cmds, cmd)
-	case ViewDescribe:
-		newDesc, cmd := m.describe.Update(msg)
-		m.describe = newDesc
 		cmds = append(cmds, cmd)
 	}
 
@@ -268,89 +332,200 @@ func (m Model) View() string {
 	if m.quitting {
 		return ""
 	}
-	if m.width < 80 || m.height < 24 {
+	if m.width < minWidth || m.height < minHeight {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
 			styleBold.Render("Terminal too small")+"\n"+
-				styleDim.Render(fmt.Sprintf("Need 80x24, got %dx%d", m.width, m.height)))
+				styleDim.Render(fmt.Sprintf("Need %dx%d, got %dx%d", minWidth, minHeight, m.width, m.height)))
 	}
 
-	contentHeight := m.height - 7
+	layout := ComputeLayout(m.width, m.height)
 
-	var content string
-	switch m.activeView {
-	case ViewServices:
-		content = m.services.View(m.width, contentHeight)
-	case ViewLogs:
-		content = m.logs.View(m.width, contentHeight)
-	case ViewDoctor:
-		content = m.doctor.View(m.width, contentHeight)
-	case ViewGraph:
-		content = m.graph.View(m.width, contentHeight)
-	case ViewDescribe:
-		content = m.describe.View(m.width, contentHeight)
+	hdr := m.header.View(m.width, m.activeTab)
+	tabBar := renderTabBar(m.width, m.activeTab)
+	footer := m.renderFooter()
+
+	var view string
+	switch m.activeTab {
+	case TabServices:
+		view = m.renderServicesTab(layout)
+	case TabLogs:
+		view = m.logs.View(m.width, layout.ContentHeight)
+	case TabStats:
+		view = styleDim.Render("  Stats view — coming soon")
+	case TabDoctor:
+		view = m.doctor.View(m.width, layout.ContentHeight)
+	case TabGraph:
+		view = m.graph.View(m.width, layout.ContentHeight)
 	}
 
-	view := lipgloss.JoinVertical(lipgloss.Left,
-		m.header.View(m.width, m.activeView),
-		m.titleBar(),
-		content,
-		m.statusBar(),
-	)
+	full := lipgloss.JoinVertical(lipgloss.Left, hdr, tabBar, view, footer)
 
 	if m.showHelp {
-		view = m.help.View(m.width, m.height, m.activeView)
+		full = m.help.View(m.width, m.height, ViewServices) // ViewServices kept for help compat
 	}
 	if m.showConfirm {
-		view = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+		full = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
 			m.confirm.View())
 	}
-
-	return view
+	return full
 }
 
-func (m Model) titleBar() string {
-	var title string
-	switch m.activeView {
-	case ViewServices:
-		filter := "all"
-		if f := m.command.Filter(); f != "" {
-			filter = "/" + f
-		}
-		title = fmt.Sprintf("  Services(%s)[%d]", filter, m.services.Count())
-	case ViewLogs:
-		title = fmt.Sprintf("  Logs: %s", m.logs.ServiceName())
-	case ViewDoctor:
-		title = "  Doctor"
-	case ViewGraph:
-		title = "  Graph"
-	case ViewDescribe:
-		title = fmt.Sprintf("  Describe: %s", m.describe.ServiceName())
+func (m Model) renderServicesTab(layout PanelLayout) string {
+	contentH := layout.ContentHeight
+
+	// Left sidebar
+	var leftPanel string
+	if layout.HasSidebar {
+		leftPanel = lipgloss.NewStyle().
+			Width(layout.SidebarWidth).
+			Height(contentH).
+			BorderRight(true).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(colorBorder).
+			Render(m.sidebar.View(layout.SidebarWidth-1, contentH))
 	}
-	return styleTitleBar.Width(m.width).Render(title)
+
+	// Right panel (log tail + progress)
+	var rightPanel string
+	if layout.HasRight {
+		logHeight := contentH
+		progressStr := m.progress.View(layout.RightWidth)
+		if progressStr != "" {
+			progressLines := strings.Count(progressStr, "\n") + 1
+			logHeight = contentH - progressLines
+			if logHeight < 2 {
+				logHeight = 2
+			}
+		}
+		logContent := m.logTail.View(layout.RightWidth, logHeight)
+		logHdr := lipgloss.NewStyle().
+			Background(lipgloss.Color("#0f1117")).
+			Foreground(colorBlue).
+			Bold(true).
+			Width(layout.RightWidth).
+			Padding(0, 1).
+			Render("Live Logs  " + styleDim.Render(m.sidebar.Selected()))
+		logSection := logHdr + "\n" + logContent
+
+		rightPanel = lipgloss.NewStyle().
+			Width(layout.RightWidth).
+			Height(contentH).
+			BorderLeft(true).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(colorBorder).
+			Render(lipgloss.JoinVertical(lipgloss.Left, logSection, progressStr))
+	}
+
+	// Center detail panel
+	centerContent := m.detail.View(layout.CenterWidth, contentH)
+	centerPanel := lipgloss.NewStyle().
+		Width(layout.CenterWidth).
+		Height(contentH).
+		Render(centerContent)
+
+	if layout.HasSidebar && layout.HasRight {
+		return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, centerPanel, rightPanel)
+	}
+	if layout.HasSidebar {
+		return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, centerPanel)
+	}
+	return centerPanel
 }
 
-func (m Model) statusBar() string {
+func (m Model) renderFooter() string {
 	if m.command.Active() {
 		return m.command.View(m.width)
 	}
 	if msg := m.toast.Message(); msg != "" {
 		return styleStatusBar.Width(m.width).Render("  " + msg)
 	}
-	return styleStatusBar.Width(m.width).Render("  Press ? for help")
-}
 
-func (m Model) pushView(v ViewType) Model {
-	m.viewStack = append(m.viewStack, v)
-	m.activeView = v
-	return m
-}
-
-func (m Model) popView() Model {
-	if len(m.viewStack) > 1 {
-		m.viewStack = m.viewStack[:len(m.viewStack)-1]
-		m.activeView = m.viewStack[len(m.viewStack)-1]
+	var hints []string
+	switch m.activeTab {
+	case TabServices:
+		hints = []string{"↑↓:nav", "enter:focus", "1-5:tabs", "r:restart", "s:stop", "u:start", "x:shell", "D:down", "/:filter", "?:help", "q:quit"}
+	case TabLogs:
+		hints = []string{"↑↓:scroll", "g/G:top/bot", "/:filter", "1-5:tabs", "esc:back"}
+	default:
+		hints = []string{"1-5:tabs", "esc:back", "?:help", "q:quit"}
 	}
-	return m
+
+	var parts []string
+	for _, h := range hints {
+		idx := strings.Index(h, ":")
+		if idx >= 0 {
+			parts = append(parts, styleInfo.Render(h[:idx+1])+styleDim.Render(h[idx+1:]))
+		} else {
+			parts = append(parts, styleDim.Render(h))
+		}
+	}
+	return styleStatusBar.Width(m.width).Render("  " + strings.Join(parts, styleDim.Render("  ")))
+}
+
+func fetchInspect(service string) tea.Cmd {
+	return func() tea.Msg {
+		out, err := exec.Command("docker", "compose", "ps", "-q", service).Output()
+		if err != nil || len(strings.TrimSpace(string(out))) == 0 {
+			return InspectResultMsg{Service: service, Err: err}
+		}
+		containerID := strings.TrimSpace(string(out))
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		dc, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation())
+		if err != nil {
+			return InspectResultMsg{Service: service, Err: err}
+		}
+		defer dc.Close()
+
+		info, err := dc.ContainerInspect(ctx, containerID)
+		if err != nil {
+			return InspectResultMsg{Service: service, Err: err}
+		}
+
+		data := InspectData{
+			Env:   info.Config.Env,
+			Binds: info.HostConfig.Binds,
+		}
+
+		for cPort, bindings := range info.NetworkSettings.Ports {
+			for _, b := range bindings {
+				pm := PortMapping{
+					HostPort:      b.HostPort,
+					ContainerPort: cPort.Port(),
+					Proto:         cPort.Proto(),
+				}
+				pm.Conflict = isPortInUse(b.HostPort)
+				data.Ports = append(data.Ports, pm)
+			}
+		}
+
+		return InspectResultMsg{Service: service, Data: data}
+	}
+}
+
+func isPortInUse(port string) bool {
+	if port == "" {
+		return false
+	}
+	conn, err := net.DialTimeout("tcp", "localhost:"+port, 200*time.Millisecond)
+	if err == nil {
+		conn.Close()
+		return true
+	}
+	return false
+}
+
+func downStack() tea.Cmd {
+	return func() tea.Msg {
+		c := exec.Command("docker", "compose", "down")
+		err := c.Run()
+		if err != nil {
+			return ActionResultMsg{Err: fmt.Errorf("stack down: %w", err)}
+		}
+		return ActionResultMsg{Text: "Stack brought down"}
+	}
 }
 
 func Run() error {
@@ -389,7 +564,8 @@ func stopService(name string) tea.Cmd {
 }
 
 func shellIntoService(name string) tea.Cmd {
-	c := exec.Command("docker", "compose", "exec", name, "sh")
+	// Try sh first; if the container has no sh, fall back to bash.
+	c := exec.Command("docker", "compose", "exec", name, "sh", "-c", "sh || bash")
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr

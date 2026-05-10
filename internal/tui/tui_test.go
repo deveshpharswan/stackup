@@ -7,27 +7,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestModel_InitialView(t *testing.T) {
+func TestModel_InitialTab(t *testing.T) {
 	m := NewModel(nil)
-	assert.Equal(t, ViewServices, m.activeView)
+	assert.Equal(t, TabServices, m.activeTab)
 }
 
-func TestModel_ViewStack(t *testing.T) {
+func TestModel_TabSwitch(t *testing.T) {
 	m := NewModel(nil)
-	m = m.pushView(ViewDoctor)
-	assert.Equal(t, ViewDoctor, m.activeView)
-	assert.Len(t, m.viewStack, 2)
-
-	m = m.popView()
-	assert.Equal(t, ViewServices, m.activeView)
-	assert.Len(t, m.viewStack, 1)
+	m.width = 120
+	m.height = 30
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
+	model := newModel.(Model)
+	assert.Equal(t, TabDoctor, model.activeTab)
 }
 
-func TestModel_PopViewAtRoot(t *testing.T) {
+func TestModel_EscReturnsToServices(t *testing.T) {
 	m := NewModel(nil)
-	m = m.popView()
-	assert.Equal(t, ViewServices, m.activeView)
-	assert.Len(t, m.viewStack, 1)
+	m.width = 120
+	m.height = 30
+	m.activeTab = TabLogs
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	model := newModel.(Model)
+	assert.Equal(t, TabServices, model.activeTab)
 }
 
 func TestModel_TerminalTooSmall(t *testing.T) {

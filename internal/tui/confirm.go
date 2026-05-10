@@ -47,6 +47,9 @@ func (m ConfirmModel) View() string {
 	case ConfirmDelete:
 		title = fmt.Sprintf("Stop service %q?", m.service)
 		desc = "This will stop the container."
+	case ConfirmStackDown:
+		title = "Bring down the full stack?"
+		desc = "This will stop and remove all containers."
 	}
 
 	content := styleBold.Render(title) + "\n\n" +

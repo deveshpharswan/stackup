@@ -56,8 +56,9 @@ type TickMsg time.Time
 type ConfirmAction int
 
 const (
-	ConfirmRestart ConfirmAction = iota
+	ConfirmRestart   ConfirmAction = iota
 	ConfirmDelete
+	ConfirmStackDown // bring down the full stack
 )
 
 type ConfirmRequestMsg struct {
